@@ -86,7 +86,8 @@ resource "sanity_webhook" "deploy" {
 - `sanity_cors_origin` - Configure CORS origins for API access
 - `sanity_project_token` - Create API tokens with specific roles
 - `sanity_webhook` - Set up webhooks for content change notifications
-- `sanity_schema` - Deploy and manage content schemas for a workspace
+- `sanity_schema` - Deploy and manage content schemas for a workspace (full JSON)
+- `sanity_schema_type` - Manage individual content types with native HCL field blocks
 - `sanity_studio_deployment` - Deploy a pre-built Sanity Studio bundle to Sanity hosting
 
 ## Data Sources

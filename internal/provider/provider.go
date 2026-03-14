@@ -109,6 +109,7 @@ func (p *SanityProvider) Resources(ctx context.Context) []func() resource.Resour
 		NewProjectTokenResource,
 		NewWebhookResource,
 		NewSchemaResource,
+		NewSchemaTypeResource,
 		NewStudioDeploymentResource,
 	}
 }
