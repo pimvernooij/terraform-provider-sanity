@@ -5,17 +5,25 @@ import (
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tessellator/go-sanity/sanity"
+	"github.com/tessellator/terraform-provider-sanity/internal/schemaclient"
+	"github.com/tessellator/terraform-provider-sanity/internal/studioclient"
 	"golang.org/x/oauth2"
 )
 
+// ProviderClients wraps both the go-sanity client and the schema API client
+// so that all resources can access their respective clients.
+type ProviderClients struct {
+	SanityClient *sanity.Client
+	SchemaClient *schemaclient.Client
+	StudioClient *studioclient.Client
+}
+
 var _ provider.Provider = &SanityProvider{}
-var _ provider.ProviderWithMetadata = &SanityProvider{}
 
 // SanityProvider defines the provider implementation.
 type SanityProvider struct {
@@ -35,18 +43,16 @@ func (p *SanityProvider) Metadata(ctx context.Context, req provider.MetadataRequ
 	resp.Version = p.version
 }
 
-func (p *SanityProvider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"token": {
+func (p *SanityProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"token": schema.StringAttribute{
 				MarkdownDescription: "The auth token used to authenticate with Sanity. May be sourced from the `SANITY_TOKEN` environment variable instead of via this attribute.",
 				Optional:            true,
-				Computed:            true,
 				Sensitive:           true,
-				Type:                types.StringType,
 			},
 		},
-	}, nil
+	}
 }
 
 func (p *SanityProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
@@ -59,7 +65,7 @@ func (p *SanityProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	}
 
 	var token string
-	if config.Token.Unknown {
+	if config.Token.IsUnknown() {
 		resp.Diagnostics.AddWarning(
 			"Unable to create client",
 			"Cannot use unknown value as token",
@@ -67,10 +73,10 @@ func (p *SanityProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 
-	if config.Token.Null {
+	if config.Token.IsNull() {
 		token = os.Getenv("SANITY_TOKEN")
 	} else {
-		token = config.Token.Value
+		token = config.Token.ValueString()
 	}
 
 	if token == "" {
@@ -86,9 +92,13 @@ func (p *SanityProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	)
 	httpClient := oauth2.NewClient(context.Background(), tokenSrc)
 
-	client := sanity.NewClient(httpClient)
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	clients := &ProviderClients{
+		SanityClient: sanity.NewClient(httpClient),
+		SchemaClient: schemaclient.NewClient(httpClient),
+		StudioClient: studioclient.NewClient(httpClient),
+	}
+	resp.DataSourceData = clients
+	resp.ResourceData = clients
 }
 
 func (p *SanityProvider) Resources(ctx context.Context) []func() resource.Resource {
@@ -98,12 +108,15 @@ func (p *SanityProvider) Resources(ctx context.Context) []func() resource.Resour
 		NewDatasetResource,
 		NewProjectTokenResource,
 		NewWebhookResource,
+		NewSchemaResource,
+		NewStudioDeploymentResource,
 	}
 }
 
 func (p *SanityProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewProjectDataSource,
+		NewSchemaDataSource,
 	}
 }
 

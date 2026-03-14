@@ -14,20 +14,32 @@ Provides a Sanity webhook. Webhooks allow you to get notified when content is cr
 
 ```terraform
 resource "sanity_webhook" "example" {
-  project_id      = sanity_project.example.id
-  name            = "Content Updates Webhook"
-  dataset         = "production"
-  url             = "https://api.example.com/webhooks/sanity"
-  http_method     = "POST"
-  include_drafts  = false
-  filter          = "_type == 'post'"
-  
+  project_id     = sanity_project.example.id
+  name           = "Content Updates Webhook"
+  dataset        = "production"
+  url            = "https://api.example.com/webhooks/sanity"
+  http_method    = "POST"
+  include_drafts = false
+  filter         = "_type == 'post'"
+
   headers = {
     "Authorization" = "Bearer ${var.api_token}"
     "Content-Type"  = "application/json"
   }
-  
+
   secret = var.webhook_secret
+}
+
+variable "api_token" {
+  description = "API token for webhook authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "webhook_secret" {
+  description = "Secret for webhook signature verification"
+  type        = string
+  sensitive   = true
 }
 ```
 
@@ -57,11 +69,4 @@ resource "sanity_webhook" "example" {
 - `id` (String) The webhook ID.
 - `updated_at` (String) The time the webhook was last updated.
 
-## Import
 
-Import is supported using the following syntax:
-
-```shell
-# import using the project ID and webhook ID separated by a slash
-terraform import sanity_webhook.example project-id/webhook-id
-```

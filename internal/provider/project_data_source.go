@@ -5,8 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tessellator/go-sanity/sanity"
 )
@@ -38,48 +37,41 @@ func (d *ProjectDataSource) Metadata(ctx context.Context, req datasource.Metadat
 	resp.TypeName = req.ProviderTypeName + "_project"
 }
 
-func (d *ProjectDataSource) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (d *ProjectDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		MarkdownDescription: "Gets a Sanity project by its ID. A project is the base resource for creating content, and the project may contain datasets, CORS origins, and tags.",
 
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				MarkdownDescription: "The project ID, which you can find at the top of the project page in Sanity.",
-				Type:                types.StringType,
 				Required:            true,
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				MarkdownDescription: "The project name.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
-			"organization": {
+			"organization": schema.StringAttribute{
 				MarkdownDescription: "The name of the organization that owns the project.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
-			"studio_host": {
+			"studio_host": schema.StringAttribute{
 				MarkdownDescription: "The studio host URL.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
-			"external_studio_host": {
+			"external_studio_host": schema.StringAttribute{
 				MarkdownDescription: "The external studio host URL.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
-			"disabled_by_user": {
+			"disabled_by_user": schema.BoolAttribute{
 				MarkdownDescription: "Indicates whether the project is archived.",
 				Computed:            true,
-				Type:                types.BoolType,
 			},
-			"activity_feed_enabled": {
+			"activity_feed_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Indicates whether the [activity feed](https://www.sanity.io/docs/activity-feed) is enabled.",
 				Computed:            true,
-				Type:                types.BoolType,
 			},
 		},
-	}, nil
+	}
 }
 
 func (d *ProjectDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
@@ -88,18 +80,18 @@ func (d *ProjectDataSource) Configure(ctx context.Context, req datasource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*sanity.Client)
+	clients, ok := req.ProviderData.(*ProviderClients)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *sanity.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *ProviderClients, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	d.client = client
+	d.client = clients.SanityClient
 }
 
 func (d *ProjectDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -112,24 +104,24 @@ func (d *ProjectDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	if data.Id.Null {
+	if data.Id.IsNull() {
 		resp.Diagnostics.AddError("Project id is null", "Project id is null")
 		return
 	}
 
-	project, err := d.client.Projects.Get(ctx, data.Id.Value)
+	project, err := d.client.Projects.Get(ctx, data.Id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
 
-	data.Id = types.String{Value: project.Id}
-	data.Name = types.String{Value: project.DisplayName}
-	data.Organization = types.String{Value: project.OrganizationId}
-	data.StudioHost = types.String{Value: project.StudioHost}
-	data.ExternalStudioHost = types.String{Value: project.Metadata["externalStudioHost"]}
-	data.IsDisabledByUser = types.Bool{Value: project.IsDisabledByUser}
-	data.ActivityFeedEnabled = types.Bool{Value: project.ActivityFeedEnabled}
+	data.Id = types.StringValue(project.Id)
+	data.Name = types.StringValue(project.DisplayName)
+	data.Organization = types.StringValue(project.OrganizationId)
+	data.StudioHost = types.StringValue(project.StudioHost)
+	data.ExternalStudioHost = types.StringValue(project.Metadata["externalStudioHost"])
+	data.IsDisabledByUser = types.BoolValue(project.IsDisabledByUser)
+	data.ActivityFeedEnabled = types.BoolValue(project.ActivityFeedEnabled)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
