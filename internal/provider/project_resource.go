@@ -290,8 +290,7 @@ func (r *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	project, err := r.client.Projects.Update(ctx, data.Id.ValueString(), updateReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
-		r.client.Projects.Delete(ctx, project.Id)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update project %s: %s", data.Id.ValueString(), err))
 		return
 	}
 
