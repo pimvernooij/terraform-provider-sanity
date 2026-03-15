@@ -110,30 +110,6 @@ func removeVariableBlocks(s string) string {
 	return variableBlockRe.ReplaceAllString(s, "")
 }
 
-// prerequisiteProject returns HCL for a test project.
-func prerequisiteProject(name string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "prereq" {
-  name = %q
-}
-`, name)
-}
-
-// prerequisiteProjectAndDataset returns HCL for a test project + dataset.
-func prerequisiteProjectAndDataset(projectName, datasetName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "prereq" {
-  name = %q
-}
-
-resource "sanity_dataset" "prereq" {
-  project  = sanity_project.prereq.id
-  name     = %q
-  acl_mode = "public"
-}
-`, projectName, datasetName)
-}
-
 // --- Helper Tests ---
 
 func TestRemoveVariableBlocks(t *testing.T) {
@@ -174,8 +150,9 @@ func TestLoadExample(t *testing.T) {
 	}
 }
 
-// --- Project ---
+// --- Project (standalone) ---
 
+// TestAccProject_basic tests project creation and import in isolation.
 func TestAccProject_basic(t *testing.T) {
 	f, stop := providerFactoriesWithRecorder("TestAccProject_basic")
 	defer stop()
@@ -204,145 +181,81 @@ func TestAccProject_basic(t *testing.T) {
 	})
 }
 
-// --- Dataset ---
+// --- All resources within a single project ---
 
-func TestAccDataset_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccDataset_basic")
+// testAccBaseConfig returns HCL for the shared project that all child
+// resources depend on. This mirrors real-world usage: one project
+// containing datasets, CORS origins, webhooks, tokens, and schemas.
+func testAccBaseConfig() string {
+	return `
+resource "sanity_project" "test" {
+  name = "tf-vcr-project"
+}
+`
+}
+
+// TestAccProjectResources tests all resource types within a single project.
+// One cassette, one project — matching real-world usage.
+func TestAccProjectResources(t *testing.T) {
+	f, stop := providerFactoriesWithRecorder("TestAccProjectResources")
 	defer stop()
+
+	vars := map[string]string{
+		"project_id":   "sanity_project.test.id",
+		"dataset_name": "sanity_dataset.main.name",
+	}
+
+	webhookVars := map[string]string{
+		"project_id":     "sanity_project.test.id",
+		"dataset_name":   "sanity_dataset.main.name",
+		"webhook_secret": `"test-secret-123"`,
+	}
+
+	// The dataset example creates sanity_dataset.main. Webhook, schema_type,
+	// and other resources that need a dataset reference it via its name.
+	config := testAccBaseConfig() +
+		loadExample(t, "sanity_dataset", map[string]string{
+			"project_id":   "sanity_project.test.id",
+			"dataset_name": `"tfvcr"`,
+		}) +
+		loadExample(t, "sanity_cors_origin", vars) +
+		loadExample(t, "sanity_webhook", webhookVars) +
+		loadExample(t, "sanity_project_token", vars) +
+		loadExample(t, "sanity_schema_type", vars)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
-				Config: prerequisiteProject("tf-vcr-dataset-project") +
-					loadExample(t, "sanity_dataset", map[string]string{
-						"project_id":   "sanity_project.prereq.id",
-						"dataset_name": `"tfvcr"`,
-					}),
+				Config: config,
 				Check: resource.ComposeAggregateTestCheckFunc(
+					// Project
+					resource.TestCheckResourceAttrSet("sanity_project.test", "id"),
+					resource.TestCheckResourceAttr("sanity_project.test", "name", "tf-vcr-project"),
+
+					// Dataset (from example)
 					resource.TestCheckResourceAttr("sanity_dataset.main", "name", "tfvcr"),
 					resource.TestCheckResourceAttr("sanity_dataset.main", "acl_mode", "public"),
-				),
-			},
-			// Import
-			{
-				ResourceName:      "sanity_dataset.main",
-				ImportState:       true,
-				ImportStateIdFunc: testAccDatasetImportID("sanity_project.prereq", "sanity_dataset.main"),
-				ImportStateVerify: true,
-			},
-		},
-	})
-}
 
-func testAccDatasetImportID(projectRes, datasetRes string) resource.ImportStateIdFunc {
-	return func(s *terraform.State) (string, error) {
-		project, ok := s.RootModule().Resources[projectRes]
-		if !ok {
-			return "", fmt.Errorf("resource %s not found", projectRes)
-		}
-		dataset, ok := s.RootModule().Resources[datasetRes]
-		if !ok {
-			return "", fmt.Errorf("resource %s not found", datasetRes)
-		}
-		return fmt.Sprintf("%s/%s", project.Primary.ID, dataset.Primary.Attributes["name"]), nil
-	}
-}
-
-// --- CORS Origin ---
-
-func TestAccCORSOrigin_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccCORSOrigin_basic")
-	defer stop()
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: f,
-		Steps: []resource.TestStep{
-			{
-				Config: prerequisiteProject("tf-vcr-cors-project") +
-					loadExample(t, "sanity_cors_origin", map[string]string{
-						"project_id": "sanity_project.prereq.id",
-					}),
-				Check: resource.ComposeAggregateTestCheckFunc(
+					// CORS Origin (from example)
 					resource.TestCheckResourceAttrSet("sanity_cors_origin.main", "id"),
 					resource.TestCheckResourceAttr("sanity_cors_origin.main", "origin", "https://example.com"),
 					resource.TestCheckResourceAttr("sanity_cors_origin.main", "allow_credentials", "true"),
-				),
-			},
-		},
-	})
-}
 
-// --- Webhook ---
-
-func TestAccWebhook_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccWebhook_basic")
-	defer stop()
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: f,
-		Steps: []resource.TestStep{
-			{
-				Config: prerequisiteProjectAndDataset("tf-vcr-webhook-project", "tfvcrwh") +
-					loadExample(t, "sanity_webhook", map[string]string{
-						"project_id":     "sanity_project.prereq.id",
-						"dataset_name":   `"tfvcrwh"`,
-						"webhook_secret": `"test-secret-123"`,
-					}),
-				Check: resource.ComposeAggregateTestCheckFunc(
+					// Webhook (from example)
 					resource.TestCheckResourceAttrSet("sanity_webhook.main", "id"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "name", "Content Updates Webhook"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "url", "https://api.example.com/webhooks/sanity"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "http_method", "POST"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "filter", "_type == 'post'"),
-				),
-			},
-			// Import
-			{
-				ResourceName:            "sanity_webhook.main",
-				ImportState:             true,
-				ImportStateIdFunc:       testAccWebhookImportID("sanity_project.prereq", "sanity_webhook.main"),
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"secret"},
-			},
-		},
-	})
-}
 
-func testAccWebhookImportID(projectRes, webhookRes string) resource.ImportStateIdFunc {
-	return func(s *terraform.State) (string, error) {
-		project, ok := s.RootModule().Resources[projectRes]
-		if !ok {
-			return "", fmt.Errorf("resource %s not found", projectRes)
-		}
-		webhook, ok := s.RootModule().Resources[webhookRes]
-		if !ok {
-			return "", fmt.Errorf("resource %s not found", webhookRes)
-		}
-		return fmt.Sprintf("%s/%s", project.Primary.ID, webhook.Primary.ID), nil
-	}
-}
+					// Project Token (from example)
+					resource.TestCheckResourceAttrSet("sanity_project_token.main", "id"),
+					resource.TestCheckResourceAttr("sanity_project_token.main", "label", "Deployer token"),
+					resource.TestCheckResourceAttrSet("sanity_project_token.main", "key"),
 
-// --- Schema Type ---
-
-func TestAccSchemaType_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccSchemaType_basic")
-	defer stop()
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: f,
-		Steps: []resource.TestStep{
-			{
-				Config: prerequisiteProjectAndDataset("tf-vcr-schema-project", "tfvcrsc") +
-					loadExample(t, "sanity_schema_type", map[string]string{
-						"project_id":   "sanity_project.prereq.id",
-						"dataset_name": `"tfvcrsc"`,
-					}),
-				Check: resource.ComposeAggregateTestCheckFunc(
+					// Schema Types (from example — article, author, category)
 					resource.TestCheckResourceAttrSet("sanity_schema_type.article", "id"),
 					resource.TestCheckResourceAttr("sanity_schema_type.article", "name", "article"),
 					resource.TestCheckResourceAttr("sanity_schema_type.article", "type", "document"),
@@ -354,31 +267,41 @@ func TestAccSchemaType_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("sanity_schema_type.category", "name", "category"),
 				),
 			},
+			// Import: dataset
+			{
+				ResourceName:      "sanity_dataset.main",
+				ImportState:       true,
+				ImportStateIdFunc: testAccImportID("sanity_project.test", "sanity_dataset.main", "name"),
+				ImportStateVerify: true,
+			},
+			// Import: webhook
+			{
+				ResourceName:            "sanity_webhook.main",
+				ImportState:             true,
+				ImportStateIdFunc:       testAccImportID("sanity_project.test", "sanity_webhook.main", "id"),
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"secret"},
+			},
 		},
 	})
 }
 
-// --- Project Token ---
-
-func TestAccProjectToken_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccProjectToken_basic")
-	defer stop()
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: f,
-		Steps: []resource.TestStep{
-			{
-				Config: prerequisiteProject("tf-vcr-token-project") +
-					loadExample(t, "sanity_project_token", map[string]string{
-						"project_id": "sanity_project.prereq.id",
-					}),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_project_token.main", "id"),
-					resource.TestCheckResourceAttr("sanity_project_token.main", "label", "Deployer token"),
-					resource.TestCheckResourceAttrSet("sanity_project_token.main", "key"),
-				),
-			},
-		},
-	})
+// testAccImportID builds a "project_id/resource_attr" import identifier.
+// attrKey is the attribute to read from the resource state ("id" or "name").
+func testAccImportID(projectRes, targetRes, attrKey string) resource.ImportStateIdFunc {
+	return func(s *terraform.State) (string, error) {
+		project, ok := s.RootModule().Resources[projectRes]
+		if !ok {
+			return "", fmt.Errorf("resource %s not found", projectRes)
+		}
+		target, ok := s.RootModule().Resources[targetRes]
+		if !ok {
+			return "", fmt.Errorf("resource %s not found", targetRes)
+		}
+		val := target.Primary.Attributes[attrKey]
+		if attrKey == "id" {
+			val = target.Primary.ID
+		}
+		return fmt.Sprintf("%s/%s", project.Primary.ID, val), nil
+	}
 }
