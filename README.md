@@ -8,11 +8,11 @@ tokens, and webhooks.
 This provider is a fork of
 [plain-insure/terraform-provider-sanity](https://github.com/plain-insure/terraform-provider-sanity),
 which itself is a fork of the original
-[tessellator/sanity](https://github.com/tessellator/terraform-provider-sanity) provider.
+[labd/sanity](https://github.com/tessellator/terraform-provider-sanity) provider.
 
 ## Quick start
 
-[Read the documentation](https://registry.terraform.io/providers/tessellator/sanity/latest/docs)
+[Read the documentation](https://registry.terraform.io/providers/labd/sanity/latest/docs)
 and check out the [examples](examples/).
 
 ## Usage
@@ -24,7 +24,7 @@ the [`required_providers`](https://www.terraform.io/language/providers/requireme
 terraform {
   required_providers {
     sanity = {
-      source = "tessellator/sanity"
+      source = "labd/sanity"
 
       # It's recommended to pin the version, e.g.:
       # version = "~> 0.2.0"
@@ -101,51 +101,60 @@ resource "sanity_webhook" "deploy" {
 
 - [Go](https://golang.org/doc/install) >= 1.22
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
+- [Task](https://taskfile.dev/) (optional, for development commands)
 
 ### Building the provider
 
 ```sh
-git clone git@github.com:pimvernooij/terraform-provider-sanity.git
+git clone git@github.com:labd/terraform-provider-sanity.git
 cd terraform-provider-sanity
-go build -o terraform-provider-sanity
+task build-local
+```
+
+### Development commands
+
+```sh
+task build-local   # Build and install locally for manual testing
+task test          # Run unit tests
+task testacc       # Run acceptance tests (requires SANITY_TOKEN)
+task lint          # Run golangci-lint
+task format        # Format Go and Terraform files
+task docs          # Generate provider documentation
+task coverage      # Run tests with coverage report
+```
+
+### Running acceptance tests
+
+Acceptance tests run against a real Sanity environment:
+
+```sh
+SANITY_TOKEN=<your-token> task testacc
 ```
 
 ### Running locally
 
-To test a locally built provider, create a `~/.terraformrc` file with a
-`dev_overrides` block pointing to your build directory:
+To test a locally built provider, `task build-local` installs it to
+`~/.terraform.d/plugins/`. Alternatively, create a `~/.terraformrc` with:
 
 ```hcl
 provider_installation {
   dev_overrides {
-    "tessellator/sanity" = "/path/to/terraform-provider-sanity"
+    "labd/sanity" = "/path/to/terraform-provider-sanity"
   }
 
   direct {}
 }
 ```
 
-### Generating documentation
+### Debugging
 
 ```sh
-go generate ./...
-```
-
-### Debugging / Troubleshooting
-
-Set `TF_LOG=DEBUG` to enable debug output for Terraform:
-
-```sh
-TF_LOG=DEBUG terraform plan
-```
-
-You can also run the provider in debug mode for use with a debugger like Delve:
-
-```sh
-go run . -debug
+TF_LOG=DEBUG terraform plan   # Enable debug output
+go run . -debug               # Run in debugger mode (for Delve)
 ```
 
 ## Authors
 
 Originally developed by [tessellator](https://github.com/tessellator),
-forked by [Plain](https://github.com/plain-insure).
+forked by [Plain](https://github.com/plain-insure),
+maintained by [Lab Digital](https://github.com/labd).

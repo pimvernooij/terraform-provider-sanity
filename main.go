@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/tessellator/sanity",
+		Address: "registry.terraform.io/labd/sanity",
 		Debug:   debug,
 	}
 

@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     sanity = {
-      source = "tessellator/sanity"
+      source = "labd/sanity"
     }
   }
   required_version = ">= 1.0"
