@@ -32,9 +32,20 @@ tasks:
       - go test -v ./...
 
   testacc:
-    desc: Run acceptance tests against a real Sanity environment
+    desc: Run acceptance tests (replays recorded cassettes, no API token needed)
+    env:
+      TF_ACC: "1"
+      SANITY_TOKEN: "test-token"
     cmds:
-      - TF_ACC=1 go test -v ./internal/provider/ -run TestAcc -timeout 30m
+      - go test -v ./internal/provider/ -run TestAcc -timeout 30m
+
+  testacc-record:
+    desc: Re-record acceptance test cassettes (requires SANITY_TOKEN)
+    env:
+      TF_ACC: "1"
+      RECORD: "true"
+    cmds:
+      - go test -v ./internal/provider/ -run TestAcc -timeout 30m
 
   docs:
     desc: Generate provider documentation

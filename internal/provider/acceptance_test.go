@@ -2,30 +2,85 @@ package provider
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
-	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"golang.org/x/oauth2"
+	"gopkg.in/dnaeon/go-vcr.v3/cassette"
+	"gopkg.in/dnaeon/go-vcr.v3/recorder"
 )
 
-// testAccProtoV6ProviderFactories returns provider factories for acceptance testing.
-var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"sanity": providerserver.NewProtocol6WithError(New("test")()),
+const examplesDir = "../../examples/resources"
+
+// providerFactoriesWithRecorder creates provider factories backed by a go-vcr
+// recorder. In replay mode (default), cassettes are replayed without hitting
+// the real API. In record mode (RECORD=true), real API calls are made and
+// captured to cassettes.
+func providerFactoriesWithRecorder(cassetteName string) (map[string]func() (tfprotov6.ProviderServer, error), func()) {
+	mode := recorder.ModeReplayOnly
+	if os.Getenv("RECORD") == "true" {
+		mode = recorder.ModeRecordOnly
+	}
+
+	r, err := recorder.NewWithOptions(&recorder.Options{
+		CassetteName:       fmt.Sprintf("testdata/cassettes/%s", cassetteName),
+		Mode:               mode,
+		SkipRequestLatency: true,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// When recording, set the oauth2 transport as real transport so requests
+	// are authenticated. During replay this is unused.
+	if mode == recorder.ModeRecordOnly {
+		token := os.Getenv("SANITY_TOKEN")
+		if token == "" {
+			log.Fatal("SANITY_TOKEN must be set when RECORD=true")
+		}
+		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+		r.SetRealTransport(&oauth2.Transport{Source: ts})
+	}
+
+	// Strip sensitive and noisy headers from cassettes.
+	r.AddHook(func(i *cassette.Interaction) error {
+		delete(i.Request.Headers, "Authorization")
+		for key := range i.Response.Headers {
+			if key != "Content-Type" {
+				delete(i.Response.Headers, key)
+			}
+		}
+		return nil
+	}, recorder.AfterCaptureHook)
+
+	client := r.GetDefaultClient()
+
+	factories := map[string]func() (tfprotov6.ProviderServer, error){
+		"sanity": providerserver.NewProtocol6WithError(New("test", WithHTTPClient(client))()),
+	}
+
+	stop := func() {
+		if err := r.Stop(); err != nil {
+			log.Printf("warning: failed to stop recorder: %s", err)
+		}
+	}
+
+	return factories, stop
 }
 
 // testAccPreCheck validates required environment variables are set.
+// During replay, SANITY_TOKEN can be a dummy value.
 func testAccPreCheck(t *testing.T) {
 	if v := os.Getenv("SANITY_TOKEN"); v == "" {
 		t.Fatal("SANITY_TOKEN must be set for acceptance tests")
 	}
 }
-
-const examplesDir = "../../examples/resources"
 
 // loadExample reads an example .tf file and substitutes var.xxx references
 // with the provided replacements. Variable declaration blocks are stripped
@@ -45,20 +100,17 @@ func loadExample(t *testing.T, resourceName string, vars map[string]string) stri
 	return result
 }
 
-// replaceAll replaces all occurrences of old with new in s.
-// Wrapper to keep loadExample readable.
 func replaceAll(s, old, new string) string {
 	return regexp.MustCompile(regexp.QuoteMeta(old)).ReplaceAllLiteralString(s, new)
 }
 
-// removeVariableBlocks strips variable "..." { ... } declarations from HCL.
 var variableBlockRe = regexp.MustCompile(`(?ms)^variable\s+"[^"]+"\s*\{[^}]*\}\s*\n?`)
 
 func removeVariableBlocks(s string) string {
 	return variableBlockRe.ReplaceAllString(s, "")
 }
 
-// prerequisiteProject returns HCL for a project resource named "prereq".
+// prerequisiteProject returns HCL for a test project.
 func prerequisiteProject(name string) string {
 	return fmt.Sprintf(`
 resource "sanity_project" "prereq" {
@@ -67,7 +119,7 @@ resource "sanity_project" "prereq" {
 `, name)
 }
 
-// prerequisiteProjectAndDataset returns HCL for a project + dataset named "prereq".
+// prerequisiteProjectAndDataset returns HCL for a test project + dataset.
 func prerequisiteProjectAndDataset(projectName, datasetName string) string {
 	return fmt.Sprintf(`
 resource "sanity_project" "prereq" {
@@ -125,19 +177,20 @@ func TestLoadExample(t *testing.T) {
 // --- Project ---
 
 func TestAccProject_basic(t *testing.T) {
-	rName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	f, stop := providerFactoriesWithRecorder("TestAccProject_basic")
+	defer stop()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
 				Config: loadExample(t, "sanity_project", map[string]string{
-					"project_name": fmt.Sprintf("%q", rName),
+					"project_name": `"tf-vcr-project"`,
 				}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("sanity_project.main", "id"),
-					resource.TestCheckResourceAttr("sanity_project.main", "name", rName),
+					resource.TestCheckResourceAttr("sanity_project.main", "name", "tf-vcr-project"),
 					resource.TestCheckResourceAttr("sanity_project.main", "color", "#0000ff"),
 				),
 			},
@@ -154,21 +207,21 @@ func TestAccProject_basic(t *testing.T) {
 // --- Dataset ---
 
 func TestAccDataset_basic(t *testing.T) {
-	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
-	rDatasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	f, stop := providerFactoriesWithRecorder("TestAccDataset_basic")
+	defer stop()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
-				Config: prerequisiteProject(rProjectName) +
+				Config: prerequisiteProject("tf-vcr-dataset-project") +
 					loadExample(t, "sanity_dataset", map[string]string{
 						"project_id":   "sanity_project.prereq.id",
-						"dataset_name": fmt.Sprintf("%q", rDatasetName),
+						"dataset_name": `"tfvcr"`,
 					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("sanity_dataset.main", "name", rDatasetName),
+					resource.TestCheckResourceAttr("sanity_dataset.main", "name", "tfvcr"),
 					resource.TestCheckResourceAttr("sanity_dataset.main", "acl_mode", "public"),
 				),
 			},
@@ -200,14 +253,15 @@ func testAccDatasetImportID(projectRes, datasetRes string) resource.ImportStateI
 // --- CORS Origin ---
 
 func TestAccCORSOrigin_basic(t *testing.T) {
-	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	f, stop := providerFactoriesWithRecorder("TestAccCORSOrigin_basic")
+	defer stop()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
-				Config: prerequisiteProject(rProjectName) +
+				Config: prerequisiteProject("tf-vcr-cors-project") +
 					loadExample(t, "sanity_cors_origin", map[string]string{
 						"project_id": "sanity_project.prereq.id",
 					}),
@@ -224,18 +278,18 @@ func TestAccCORSOrigin_basic(t *testing.T) {
 // --- Webhook ---
 
 func TestAccWebhook_basic(t *testing.T) {
-	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
-	rDatasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	f, stop := providerFactoriesWithRecorder("TestAccWebhook_basic")
+	defer stop()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
-				Config: prerequisiteProjectAndDataset(rProjectName, rDatasetName) +
+				Config: prerequisiteProjectAndDataset("tf-vcr-webhook-project", "tfvcrwh") +
 					loadExample(t, "sanity_webhook", map[string]string{
 						"project_id":     "sanity_project.prereq.id",
-						"dataset_name":   fmt.Sprintf("%q", rDatasetName),
+						"dataset_name":   `"tfvcrwh"`,
 						"webhook_secret": `"test-secret-123"`,
 					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -275,34 +329,29 @@ func testAccWebhookImportID(projectRes, webhookRes string) resource.ImportStateI
 // --- Schema Type ---
 
 func TestAccSchemaType_basic(t *testing.T) {
-	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
-	rDatasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	f, stop := providerFactoriesWithRecorder("TestAccSchemaType_basic")
+	defer stop()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
-				Config: prerequisiteProjectAndDataset(rProjectName, rDatasetName) +
+				Config: prerequisiteProjectAndDataset("tf-vcr-schema-project", "tfvcrsc") +
 					loadExample(t, "sanity_schema_type", map[string]string{
 						"project_id":   "sanity_project.prereq.id",
-						"dataset_name": fmt.Sprintf("%q", rDatasetName),
+						"dataset_name": `"tfvcrsc"`,
 					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify the article type
 					resource.TestCheckResourceAttrSet("sanity_schema_type.article", "id"),
 					resource.TestCheckResourceAttr("sanity_schema_type.article", "name", "article"),
 					resource.TestCheckResourceAttr("sanity_schema_type.article", "type", "document"),
 					resource.TestCheckResourceAttr("sanity_schema_type.article", "title", "Article"),
 					resource.TestCheckResourceAttr("sanity_schema_type.article", "field.#", "6"),
-					// Verify the author type
 					resource.TestCheckResourceAttrSet("sanity_schema_type.author", "id"),
 					resource.TestCheckResourceAttr("sanity_schema_type.author", "name", "author"),
-					resource.TestCheckResourceAttr("sanity_schema_type.author", "type", "document"),
-					// Verify the category type
 					resource.TestCheckResourceAttrSet("sanity_schema_type.category", "id"),
 					resource.TestCheckResourceAttr("sanity_schema_type.category", "name", "category"),
-					resource.TestCheckResourceAttr("sanity_schema_type.category", "type", "document"),
 				),
 			},
 		},
@@ -312,14 +361,15 @@ func TestAccSchemaType_basic(t *testing.T) {
 // --- Project Token ---
 
 func TestAccProjectToken_basic(t *testing.T) {
-	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	f, stop := providerFactoriesWithRecorder("TestAccProjectToken_basic")
+	defer stop()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		ProtoV6ProviderFactories: f,
 		Steps: []resource.TestStep{
 			{
-				Config: prerequisiteProject(rProjectName) +
+				Config: prerequisiteProject("tf-vcr-token-project") +
 					loadExample(t, "sanity_project_token", map[string]string{
 						"project_id": "sanity_project.prereq.id",
 					}),

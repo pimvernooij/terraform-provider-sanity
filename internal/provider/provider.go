@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"net/http"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -14,6 +15,17 @@ import (
 	"github.com/tessellator/terraform-provider-sanity/internal/studioclient"
 	"golang.org/x/oauth2"
 )
+
+// ProviderOption configures the provider during construction.
+type ProviderOption func(*SanityProvider)
+
+// WithHTTPClient injects a custom HTTP client into the provider.
+// Used for testing with go-vcr recorded cassettes.
+func WithHTTPClient(c *http.Client) ProviderOption {
+	return func(p *SanityProvider) {
+		p.httpClient = c
+	}
+}
 
 // ProviderClients wraps both the go-sanity client and the schema API client
 // so that all resources can access their respective clients.
@@ -31,6 +43,10 @@ type SanityProvider struct {
 	// provider is built and run locally, and "test" when running acceptance
 	// testing.
 	version string
+
+	// httpClient is an optional pre-configured HTTP client, used for testing
+	// with go-vcr cassettes. When nil, an oauth2 client is created from the token.
+	httpClient *http.Client
 }
 
 // SanityProviderModel describes the provider data model.
@@ -87,10 +103,13 @@ func (p *SanityProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 
-	tokenSrc := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: token},
-	)
-	httpClient := oauth2.NewClient(context.Background(), tokenSrc)
+	httpClient := p.httpClient
+	if httpClient == nil {
+		tokenSrc := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: token},
+		)
+		httpClient = oauth2.NewClient(context.Background(), tokenSrc)
+	}
 
 	clients := &ProviderClients{
 		SanityClient: sanity.NewClient(httpClient),
@@ -121,10 +140,14 @@ func (p *SanityProvider) DataSources(ctx context.Context) []func() datasource.Da
 	}
 }
 
-func New(version string) func() provider.Provider {
+func New(version string, opts ...ProviderOption) func() provider.Provider {
 	return func() provider.Provider {
-		return &SanityProvider{
+		p := &SanityProvider{
 			version: version,
 		}
+		for _, opt := range opts {
+			opt(p)
+		}
+		return p
 	}
 }

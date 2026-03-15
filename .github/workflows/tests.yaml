@@ -19,8 +19,13 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           args: --issues-exit-code=0 --timeout=5m
-      - name: Run tests
+      - name: Run unit tests
         run: go test -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./... -v ./...
+      - name: Run acceptance tests (VCR replay)
+        run: go test -v ./internal/provider/ -run TestAcc -timeout 30m
+        env:
+          TF_ACC: "1"
+          SANITY_TOKEN: "test-token"
       - name: Build binary
         uses: goreleaser/goreleaser-action@v6
         with:
