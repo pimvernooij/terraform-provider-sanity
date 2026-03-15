@@ -114,22 +114,55 @@ task build-local
 ### Development commands
 
 ```sh
-task build-local   # Build and install locally for manual testing
-task test          # Run unit tests
-task testacc       # Run acceptance tests (requires SANITY_TOKEN)
-task lint          # Run golangci-lint
-task format        # Format Go and Terraform files
-task docs          # Generate provider documentation
-task coverage      # Run tests with coverage report
+task build-local      # Build and install locally for manual testing
+task test             # Run unit tests
+task testacc          # Run acceptance tests (replays recorded cassettes)
+task testacc-record   # Re-record cassettes against live API
+task lint             # Run golangci-lint
+task format           # Format Go and Terraform files
+task docs             # Generate provider documentation
+task coverage         # Run tests with coverage report
 ```
 
-### Running acceptance tests
+### Acceptance tests
 
-Acceptance tests run against a real Sanity environment:
+Acceptance tests use [go-vcr](https://github.com/dnaeon/go-vcr) to record and
+replay HTTP interactions. This means CI and local development don't need a real
+Sanity API token — tests replay from pre-recorded YAML cassettes stored in
+`internal/provider/testdata/cassettes/`.
+
+**Replaying cassettes** (default — no API token needed):
 
 ```sh
-SANITY_TOKEN=<your-token> task testacc
+task testacc
 ```
+
+This replays the committed cassettes. If a cassette is missing for a test, that
+test will fail. Cassettes must be recorded first.
+
+**Recording cassettes** (requires a real Sanity account):
+
+```sh
+SANITY_TOKEN=<your-token> task testacc-record
+```
+
+This runs every acceptance test against the live Sanity API and writes the HTTP
+interactions to cassette files. The `AfterCaptureHook` strips `Authorization`
+headers, so cassettes are safe to commit. Commit the resulting YAML files so
+that `task testacc` can replay them.
+
+**When to re-record:**
+
+- After changing request/response shapes in a resource (new fields, different API calls)
+- After changing test configurations (different resource names or attributes)
+- When the Sanity API changes its response format
+
+**How it works:**
+
+| Command | Mode | API calls | Token needed |
+|---------|------|-----------|--------------|
+| `task testacc` | `ModeReplayOnly` | None — replays cassettes | No (`test-token` placeholder) |
+| `task testacc-record` | `ModeRecordOnly` | Real HTTP to Sanity API | Yes (`SANITY_TOKEN`) |
 
 ### Running locally
 
