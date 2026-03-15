@@ -22,7 +22,13 @@ const examplesDir = "../../examples/resources"
 // recorder. In replay mode (default), cassettes are replayed without hitting
 // the real API. In record mode (RECORD=true), real API calls are made and
 // captured to cassettes.
-func providerFactoriesWithRecorder(cassetteName string) (map[string]func() (tfprotov6.ProviderServer, error), func()) {
+func providerFactoriesWithRecorder(t *testing.T, cassetteName string) (map[string]func() (tfprotov6.ProviderServer, error), func()) {
+	t.Helper()
+
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("TF_ACC not set, skipping acceptance test")
+	}
+
 	mode := recorder.ModeReplayOnly
 	if os.Getenv("RECORD") == "true" {
 		mode = recorder.ModeRecordOnly
@@ -34,7 +40,7 @@ func providerFactoriesWithRecorder(cassetteName string) (map[string]func() (tfpr
 		SkipRequestLatency: true,
 	})
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("failed to create VCR recorder for cassette %s: %s", cassetteName, err)
 	}
 
 	// When recording, set the oauth2 transport as real transport so requests
@@ -42,7 +48,7 @@ func providerFactoriesWithRecorder(cassetteName string) (map[string]func() (tfpr
 	if mode == recorder.ModeRecordOnly {
 		token := os.Getenv("SANITY_TOKEN")
 		if token == "" {
-			log.Fatal("SANITY_TOKEN must be set when RECORD=true")
+			t.Fatal("SANITY_TOKEN must be set when RECORD=true")
 		}
 		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 		r.SetRealTransport(&oauth2.Transport{Source: ts})
@@ -154,7 +160,7 @@ func TestLoadExample(t *testing.T) {
 
 // TestAccProject_basic tests project creation and import in isolation.
 func TestAccProject_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccProject_basic")
+	f, stop := providerFactoriesWithRecorder(t, "TestAccProject_basic")
 	defer stop()
 
 	resource.Test(t, resource.TestCase{
@@ -197,7 +203,7 @@ resource "sanity_project" "test" {
 // TestAccProjectResources tests all resource types within a single project.
 // One cassette, one project — matching real-world usage.
 func TestAccProjectResources(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder("TestAccProjectResources")
+	f, stop := providerFactoriesWithRecorder(t, "TestAccProjectResources")
 	defer stop()
 
 	vars := map[string]string{
