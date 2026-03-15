@@ -9,7 +9,7 @@ resource "sanity_schema_type" "article" {
   project_id     = var.project_id
   dataset        = var.dataset_name
   workspace_name = "default"
-  version        = "2025-05-01"
+
 
   name  = "article"
   type  = "document"
@@ -76,7 +76,7 @@ resource "sanity_schema_type" "author" {
   project_id     = var.project_id
   dataset        = var.dataset_name
   workspace_name = "default"
-  version        = "2025-05-01"
+
 
   name  = "author"
   type  = "document"
@@ -113,7 +113,7 @@ resource "sanity_schema_type" "category" {
   project_id     = var.project_id
   dataset        = var.dataset_name
   workspace_name = "default"
-  version        = "2025-05-01"
+
 
   name  = "category"
   type  = "document"

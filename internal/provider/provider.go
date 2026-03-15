@@ -127,7 +127,6 @@ func (p *SanityProvider) Resources(ctx context.Context) []func() resource.Resour
 		NewDatasetResource,
 		NewProjectTokenResource,
 		NewWebhookResource,
-		NewSchemaResource,
 		NewSchemaTypeResource,
 		NewStudioDeploymentResource,
 	}
@@ -136,7 +135,6 @@ func (p *SanityProvider) Resources(ctx context.Context) []func() resource.Resour
 func (p *SanityProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewProjectDataSource,
-		NewSchemaDataSource,
 	}
 }
 

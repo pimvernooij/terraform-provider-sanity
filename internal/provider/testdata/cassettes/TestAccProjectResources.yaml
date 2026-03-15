@@ -33,7 +33,7 @@ interactions:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 297.050958ms
+        duration: 199.209833ms
     - id: 1
       request:
         proto: HTTP/1.1
@@ -60,13 +60,13 @@ interactions:
         trailer: {}
         content_length: 187
         uncompressed: false
-        body: '{"id":2618643,"origin":"https://example.com","allowCredentials":true,"createdAt":"2026-03-15T15:56:17.105Z","updatedAt":"2026-03-15T16:27:57.544Z","deletedAt":null,"projectId":"pib5ji3x"}'
+        body: '{"id":2618643,"origin":"https://example.com","allowCredentials":true,"createdAt":"2026-03-15T15:56:17.105Z","updatedAt":"2026-03-15T16:50:01.983Z","deletedAt":null,"projectId":"pib5ji3x"}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 788.130459ms
+        duration: 168.895083ms
     - id: 2
       request:
         proto: HTTP/1.1
@@ -93,13 +93,13 @@ interactions:
         trailer: {}
         content_length: 342
         uncompressed: false
-        body: '{"id":"si3xCs9LJDGrR7","key":"sklwX6vXODLEtwxOCBQqnFM6v5dQQfYci9ZrzzmIVJ0eLam8wxHxQlVqrll0DPAnd0knOWdQ0wEji1RajgN6ATp7tOSvj2QwBqOxbe4tMEc6nrb7svAOqV1b6t6ZS6bOdAE6ErqQLUt7Zs17FcYh6eGtKTCr25mtEDLp1GihJ6FhioxhZKfy","roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)"}],"label":"Deployer token","projectUserId":"p-W0IZcBj6PTsQ"}'
+        body: '{"id":"sixgTIt9vUhMrS","key":"skEpKm4VfSmcXrtSbnovkh1vD4THWbkAbpW5L7bk8RN6OSipbqTAeUAh7eaZZTns1tpGFdiovOwD4YKBG96NbKjp9Gi4OgNf5HjcIO7DSVuEefaYCnVBDv4zZ8yVcCGPJozq9DcqoFYZhiivqZAKuawbi1pR32LsrinuznpBU4M4lhGdU5QL","roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)"}],"label":"Deployer token","projectUserId":"p-4GTomqFSOQPQ"}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 1.504921292s
+        duration: 1.445140792s
     - id: 3
       request:
         proto: HTTP/1.1
@@ -132,7 +132,7 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 3.348456625s
+        duration: 3.702423458s
     - id: 4
       request:
         proto: HTTP/1.1
@@ -163,7 +163,7 @@ interactions:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 125.411083ms
+        duration: 102.183792ms
     - id: 5
       request:
         proto: HTTP/1.1
@@ -196,7 +196,7 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 152.766ms
+        duration: 193.339125ms
     - id: 6
       request:
         proto: HTTP/1.1
@@ -223,13 +223,13 @@ interactions:
         trailer: {}
         content_length: 581
         uncompressed: false
-        body: '{"type":"document","rule":{"on":["create","update","delete"],"filter":"_type == ''post''"},"filter":null,"projection":null,"apiVersion":"v2025-02-19","httpMethod":"POST","includeDrafts":false,"includeAllVersions":false,"headers":{"Content-Type":"application/json"},"secret":"test-secret-123","id":"wYzHRR1y93UAJvnZ","name":"Content Updates Webhook","projectId":"pib5ji3x","dataset":"tfvcr","url":"https://example.com/webhooks/sanity","createdAt":"2026-03-15T16:28:01.106Z","createdByUserId":"pvnQhWn0k","isDisabled":false,"isDisabledByUser":false,"deletedAt":null,"description":null}'
+        body: '{"type":"document","rule":{"on":["create","update","delete"],"filter":"_type == ''post''"},"filter":null,"projection":null,"apiVersion":"v2025-02-19","httpMethod":"POST","includeDrafts":false,"includeAllVersions":false,"headers":{"Content-Type":"application/json"},"secret":"test-secret-123","id":"jcUEheU3QGrr8uxG","name":"Content Updates Webhook","projectId":"pib5ji3x","dataset":"tfvcr","url":"https://example.com/webhooks/sanity","createdAt":"2026-03-15T16:50:05.877Z","createdByUserId":"pvnQhWn0k","isDisabled":false,"isDisabledByUser":false,"deletedAt":null,"description":null}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 401.872875ms
+        duration: 347.678125ms
     - id: 7
       request:
         proto: HTTP/1.1
@@ -262,7 +262,7 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 176.334833ms
+        duration: 198.984292ms
     - id: 8
       request:
         proto: HTTP/1.1
@@ -295,7 +295,7 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 130.974ms
+        duration: 167.682917ms
     - id: 9
       request:
         proto: HTTP/1.1
@@ -322,13 +322,13 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-W0IZcBj6PTsQ","createdAt":"2026-03-15T16:27:58.153Z","updatedAt":"2026-03-15T16:27:58.153Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
+        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-4GTomqFSOQPQ","createdAt":"2026-03-15T16:50:02.587Z","updatedAt":"2026-03-15T16:50:02.587Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 103.308583ms
+        duration: 95.144708ms
     - id: 10
       request:
         proto: HTTP/1.1
@@ -355,47 +355,14 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-W0IZcBj6PTsQ","createdAt":"2026-03-15T16:27:58.153Z","updatedAt":"2026-03-15T16:27:58.153Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
+        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-4GTomqFSOQPQ","createdAt":"2026-03-15T16:50:02.587Z","updatedAt":"2026-03-15T16:50:02.587Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 89.208916ms
+        duration: 85.425083ms
     - id: 11
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: api.sanity.io
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers:
-            Content-Type:
-                - application/json
-        url: https://api.sanity.io/v2021-06-07/projects/pib5ji3x/datasets
-        method: GET
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 236
-        uncompressed: false
-        body: '[{"name":"production","aclMode":"public","createdAt":"2026-03-15T15:44:06.938Z","createdByUserId":"ppU8ETCCO","tags":[]},{"name":"tfvcr","aclMode":"public","createdAt":"2026-03-15T16:27:57.588Z","createdByUserId":"pvnQhWn0k","tags":[]}]'
-        headers:
-            Content-Type:
-                - application/json; charset=utf-8
-        status: 200 OK
-        code: 200
-        duration: 62.382833ms
-    - id: 12
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -421,13 +388,46 @@ interactions:
         trailer: {}
         content_length: 379
         uncompressed: false
-        body: '[{"id":2618616,"origin":"http://localhost:3333","allowCredentials":true,"createdAt":"2026-03-15T15:44:05.289Z","updatedAt":"2026-03-15T15:44:05.289Z","deletedAt":null,"projectId":"pib5ji3x"},{"id":2618643,"origin":"https://example.com","allowCredentials":true,"createdAt":"2026-03-15T15:56:17.105Z","updatedAt":"2026-03-15T16:27:57.544Z","deletedAt":null,"projectId":"pib5ji3x"}]'
+        body: '[{"id":2618616,"origin":"http://localhost:3333","allowCredentials":true,"createdAt":"2026-03-15T15:44:05.289Z","updatedAt":"2026-03-15T15:44:05.289Z","deletedAt":null,"projectId":"pib5ji3x"},{"id":2618643,"origin":"https://example.com","allowCredentials":true,"createdAt":"2026-03-15T15:56:17.105Z","updatedAt":"2026-03-15T16:50:01.983Z","deletedAt":null,"projectId":"pib5ji3x"}]'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 63.974333ms
+        duration: 66.373125ms
+    - id: 12
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: api.sanity.io
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Content-Type:
+                - application/json
+        url: https://api.sanity.io/v2021-06-07/projects/pib5ji3x/datasets
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 236
+        uncompressed: false
+        body: '[{"name":"production","aclMode":"public","createdAt":"2026-03-15T15:44:06.938Z","createdByUserId":"ppU8ETCCO","tags":[]},{"name":"tfvcr","aclMode":"public","createdAt":"2026-03-15T16:50:02.030Z","createdByUserId":"pvnQhWn0k","tags":[]}]'
+        headers:
+            Content-Type:
+                - application/json; charset=utf-8
+        status: 200 OK
+        code: 200
+        duration: 77.340417ms
     - id: 13
       request:
         proto: HTTP/1.1
@@ -454,13 +454,13 @@ interactions:
         trailer: {}
         content_length: 355
         uncompressed: false
-        body: '[{"id":"sii0T92aURyS7K","label":"acc test","projectUserId":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.286Z","roles":[{"name":"developer","title":"Developer"}]},{"id":"si3xCs9LJDGrR7","label":"Deployer token","projectUserId":"p-W0IZcBj6PTsQ","createdAt":"2026-03-15T16:27:58.163Z","roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)"}]}]'
+        body: '[{"id":"sii0T92aURyS7K","label":"acc test","projectUserId":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.286Z","roles":[{"name":"developer","title":"Developer"}]},{"id":"sixgTIt9vUhMrS","label":"Deployer token","projectUserId":"p-4GTomqFSOQPQ","createdAt":"2026-03-15T16:50:02.600Z","roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)"}]}]'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 67.875334ms
+        duration: 92.492834ms
     - id: 14
       request:
         proto: HTTP/1.1
@@ -477,7 +477,7 @@ interactions:
         headers:
             Content-Type:
                 - application/json
-        url: https://pib5ji3x.api.sanity.io/v2025-02-19/hooks/projects/pib5ji3x/wYzHRR1y93UAJvnZ
+        url: https://pib5ji3x.api.sanity.io/v2025-02-19/hooks/projects/pib5ji3x/jcUEheU3QGrr8uxG
         method: GET
       response:
         proto: HTTP/2.0
@@ -487,13 +487,13 @@ interactions:
         trailer: {}
         content_length: 581
         uncompressed: false
-        body: '{"type":"document","rule":{"on":["create","update","delete"],"filter":"_type == ''post''"},"filter":null,"projection":null,"apiVersion":"v2025-02-19","httpMethod":"POST","includeDrafts":false,"includeAllVersions":false,"headers":{"Content-Type":"application/json"},"secret":"test-secret-123","id":"wYzHRR1y93UAJvnZ","name":"Content Updates Webhook","projectId":"pib5ji3x","dataset":"tfvcr","url":"https://example.com/webhooks/sanity","createdAt":"2026-03-15T16:28:01.106Z","createdByUserId":"pvnQhWn0k","isDisabled":false,"isDisabledByUser":false,"deletedAt":null,"description":null}'
+        body: '{"type":"document","rule":{"on":["create","update","delete"],"filter":"_type == ''post''"},"filter":null,"projection":null,"apiVersion":"v2025-02-19","httpMethod":"POST","includeDrafts":false,"includeAllVersions":false,"headers":{"Content-Type":"application/json"},"secret":"test-secret-123","id":"jcUEheU3QGrr8uxG","name":"Content Updates Webhook","projectId":"pib5ji3x","dataset":"tfvcr","url":"https://example.com/webhooks/sanity","createdAt":"2026-03-15T16:50:05.877Z","createdByUserId":"pvnQhWn0k","isDisabled":false,"isDisabledByUser":false,"deletedAt":null,"description":null}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 136.693208ms
+        duration: 127.75825ms
     - id: 15
       request:
         proto: HTTP/1.1
@@ -520,13 +520,13 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-W0IZcBj6PTsQ","createdAt":"2026-03-15T16:27:58.153Z","updatedAt":"2026-03-15T16:27:58.153Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
+        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-4GTomqFSOQPQ","createdAt":"2026-03-15T16:50:02.587Z","updatedAt":"2026-03-15T16:50:02.587Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 119.669625ms
+        duration: 162.167458ms
     - id: 16
       request:
         proto: HTTP/1.1
@@ -553,13 +553,13 @@ interactions:
         trailer: {}
         content_length: 236
         uncompressed: false
-        body: '[{"name":"production","aclMode":"public","createdAt":"2026-03-15T15:44:06.938Z","createdByUserId":"ppU8ETCCO","tags":[]},{"name":"tfvcr","aclMode":"public","createdAt":"2026-03-15T16:27:57.588Z","createdByUserId":"pvnQhWn0k","tags":[]}]'
+        body: '[{"name":"production","aclMode":"public","createdAt":"2026-03-15T15:44:06.938Z","createdByUserId":"ppU8ETCCO","tags":[]},{"name":"tfvcr","aclMode":"public","createdAt":"2026-03-15T16:50:02.030Z","createdByUserId":"pvnQhWn0k","tags":[]}]'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 67.298917ms
+        duration: 69.501208ms
     - id: 17
       request:
         proto: HTTP/1.1
@@ -586,13 +586,13 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-W0IZcBj6PTsQ","createdAt":"2026-03-15T16:27:58.153Z","updatedAt":"2026-03-15T16:27:58.153Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
+        body: '{"id":"pib5ji3x","displayName":"terraform-provider-test-project","studioHost":null,"isBlocked":false,"isDisabled":false,"isDisabledByUser":false,"metadata":{"integration":"manage"},"maxRetentionDays":90,"activityFeedEnabled":true,"createdAt":"2026-03-15T15:44:05.287Z","updatedAt":"2026-03-15T15:44:06.235Z","organizationId":"o5NZ7zemK","members":[{"id":"ppU8ETCCO","createdAt":"2026-03-15T15:44:05.335Z","updatedAt":"2026-03-15T15:44:05.335Z","isCurrentUser":false,"isRobot":false,"roles":[{"name":"administrator","title":"Administrator","description":"Read and write access to all datasets, with full access to all project settings."}]},{"id":"pvnQhWn0k","createdAt":"2026-03-15T15:44:37.262Z","updatedAt":"2026-03-15T15:44:37.262Z","isCurrentUser":true,"isRobot":true,"roles":[{"name":"developer","title":"Developer","description":"Read and write access to all datasets, with access to project settings for developers. (Tokens: read+write)"}]},{"id":"p-4GTomqFSOQPQ","createdAt":"2026-03-15T16:50:02.587Z","updatedAt":"2026-03-15T16:50:02.587Z","isCurrentUser":false,"isRobot":true,"roles":[{"name":"deploy-studio","title":"Deploy Studio (Token only)","description":"Access to deploy Sanity Studio and GraphQL APIs to our hosted service."}]}],"features":["activityFeed","contentSourceMapping","editorialAiFieldActions","embeddingsIndexApi","noVersionRevival","privateDataset","roleContributor","roleDeveloper","roleEditor","roleViewer","sanityTasks","scheduledPublishing","singleDocRelease","studioComments","supportCommunity","toggle.schema.upload-pause","toggle.user-application.upload-live-manifest"],"pendingInvites":0}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 76.64425ms
+        duration: 87.023291ms
     - id: 18
       request:
         proto: HTTP/1.1
@@ -609,7 +609,7 @@ interactions:
         headers:
             Content-Type:
                 - application/json
-        url: https://pib5ji3x.api.sanity.io/v2025-02-19/hooks/projects/pib5ji3x/wYzHRR1y93UAJvnZ
+        url: https://pib5ji3x.api.sanity.io/v2025-02-19/hooks/projects/pib5ji3x/jcUEheU3QGrr8uxG
         method: GET
       response:
         proto: HTTP/2.0
@@ -619,47 +619,14 @@ interactions:
         trailer: {}
         content_length: 581
         uncompressed: false
-        body: '{"type":"document","rule":{"on":["create","update","delete"],"filter":"_type == ''post''"},"filter":null,"projection":null,"apiVersion":"v2025-02-19","httpMethod":"POST","includeDrafts":false,"includeAllVersions":false,"headers":{"Content-Type":"application/json"},"secret":"test-secret-123","id":"wYzHRR1y93UAJvnZ","name":"Content Updates Webhook","projectId":"pib5ji3x","dataset":"tfvcr","url":"https://example.com/webhooks/sanity","createdAt":"2026-03-15T16:28:01.106Z","createdByUserId":"pvnQhWn0k","isDisabled":false,"isDisabledByUser":false,"deletedAt":null,"description":null}'
+        body: '{"type":"document","rule":{"on":["create","update","delete"],"filter":"_type == ''post''"},"filter":null,"projection":null,"apiVersion":"v2025-02-19","httpMethod":"POST","includeDrafts":false,"includeAllVersions":false,"headers":{"Content-Type":"application/json"},"secret":"test-secret-123","id":"jcUEheU3QGrr8uxG","name":"Content Updates Webhook","projectId":"pib5ji3x","dataset":"tfvcr","url":"https://example.com/webhooks/sanity","createdAt":"2026-03-15T16:50:05.877Z","createdByUserId":"pvnQhWn0k","isDisabled":false,"isDisabledByUser":false,"deletedAt":null,"description":null}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 93.629333ms
+        duration: 92.569083ms
     - id: 19
-      request:
-        proto: HTTP/1.1
-        proto_major: 1
-        proto_minor: 1
-        content_length: 0
-        transfer_encoding: []
-        trailer: {}
-        host: api.sanity.io
-        remote_addr: ""
-        request_uri: ""
-        body: ""
-        form: {}
-        headers:
-            Content-Type:
-                - application/json
-        url: https://api.sanity.io/v2021-06-07/projects/pib5ji3x/cors/2618643
-        method: DELETE
-      response:
-        proto: HTTP/2.0
-        proto_major: 2
-        proto_minor: 0
-        transfer_encoding: []
-        trailer: {}
-        content_length: 29
-        uncompressed: false
-        body: '{"id":2618643,"deleted":true}'
-        headers:
-            Content-Type:
-                - application/json; charset=utf-8
-        status: 200 OK
-        code: 200
-        duration: 106.109ms
-    - id: 20
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -691,8 +658,8 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 153.378583ms
-    - id: 21
+        duration: 157.681917ms
+    - id: 20
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -724,8 +691,8 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 153.969584ms
-    - id: 22
+        duration: 152.225125ms
+    - id: 21
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -757,8 +724,8 @@ interactions:
                 - application/json; charset=utf-8
         status: 201 Created
         code: 201
-        duration: 173.103708ms
-    - id: 23
+        duration: 152.89925ms
+    - id: 22
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -774,7 +741,7 @@ interactions:
         headers:
             Content-Type:
                 - application/json
-        url: https://pib5ji3x.api.sanity.io/v2025-02-19/hooks/projects/pib5ji3x/wYzHRR1y93UAJvnZ
+        url: https://pib5ji3x.api.sanity.io/v2025-02-19/hooks/projects/pib5ji3x/jcUEheU3QGrr8uxG
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -784,13 +751,46 @@ interactions:
         trailer: {}
         content_length: 37
         uncompressed: false
-        body: '{"id":"wYzHRR1y93UAJvnZ","deleted":1}'
+        body: '{"id":"jcUEheU3QGrr8uxG","deleted":1}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 1.004989667s
+        duration: 695.454125ms
+    - id: 23
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: api.sanity.io
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            Content-Type:
+                - application/json
+        url: https://api.sanity.io/v2021-06-07/projects/pib5ji3x/cors/2618643
+        method: DELETE
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 29
+        uncompressed: false
+        body: '{"id":2618643,"deleted":true}'
+        headers:
+            Content-Type:
+                - application/json; charset=utf-8
+        status: 200 OK
+        code: 200
+        duration: 700.034459ms
     - id: 24
       request:
         proto: HTTP/1.1
@@ -807,7 +807,7 @@ interactions:
         headers:
             Content-Type:
                 - application/json
-        url: https://api.sanity.io/v2021-06-07/projects/pib5ji3x/tokens/si3xCs9LJDGrR7
+        url: https://api.sanity.io/v2021-06-07/projects/pib5ji3x/tokens/sixgTIt9vUhMrS
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -817,13 +817,13 @@ interactions:
         trailer: {}
         content_length: 38
         uncompressed: false
-        body: '{"id":"si3xCs9LJDGrR7","deleted":true}'
+        body: '{"id":"sixgTIt9vUhMrS","deleted":true}'
         headers:
             Content-Type:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 1.014524542s
+        duration: 834.321333ms
     - id: 25
       request:
         proto: HTTP/1.1
@@ -856,4 +856,4 @@ interactions:
                 - application/json; charset=utf-8
         status: 200 OK
         code: 200
-        duration: 817.734833ms
+        duration: 1.385684417s
