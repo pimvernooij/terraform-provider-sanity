@@ -1,24 +1,26 @@
-resource "sanity_webhook" "example" {
-  project_id     = sanity_project.example.id
+resource "sanity_webhook" "main" {
+  project_id     = var.project_id
   name           = "Content Updates Webhook"
-  dataset        = "production"
+  dataset        = var.dataset_name
   url            = "https://api.example.com/webhooks/sanity"
   http_method    = "POST"
   include_drafts = false
   filter         = "_type == 'post'"
+  secret         = var.webhook_secret
 
   headers = {
-    "Authorization" = "Bearer ${var.api_token}"
-    "Content-Type"  = "application/json"
+    "Content-Type" = "application/json"
   }
-
-  secret = var.webhook_secret
 }
 
-variable "api_token" {
-  description = "API token for webhook authentication"
+variable "project_id" {
+  description = "The ID of the Sanity project"
   type        = string
-  sensitive   = true
+}
+
+variable "dataset_name" {
+  description = "The dataset to listen to"
+  type        = string
 }
 
 variable "webhook_secret" {

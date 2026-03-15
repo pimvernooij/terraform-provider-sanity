@@ -6,8 +6,8 @@
 # --- Article type ---
 
 resource "sanity_schema_type" "article" {
-  project_id     = sanity_project.blog.id
-  dataset        = "production"
+  project_id     = var.project_id
+  dataset        = var.dataset_name
   workspace_name = "default"
   version        = "2025-05-01"
 
@@ -73,8 +73,8 @@ resource "sanity_schema_type" "article" {
 # --- Author type ---
 
 resource "sanity_schema_type" "author" {
-  project_id     = sanity_project.blog.id
-  dataset        = "production"
+  project_id     = var.project_id
+  dataset        = var.dataset_name
   workspace_name = "default"
   version        = "2025-05-01"
 
@@ -110,8 +110,8 @@ resource "sanity_schema_type" "author" {
 # --- Category type ---
 
 resource "sanity_schema_type" "category" {
-  project_id     = sanity_project.blog.id
-  dataset        = "production"
+  project_id     = var.project_id
+  dataset        = var.dataset_name
   workspace_name = "default"
   version        = "2025-05-01"
 
@@ -139,4 +139,14 @@ resource "sanity_schema_type" "category" {
     type  = "text"
     title = "Description"
   }
+}
+
+variable "project_id" {
+  description = "The ID of the Sanity project"
+  type        = string
+}
+
+variable "dataset_name" {
+  description = "The dataset for the schema"
+  type        = string
 }

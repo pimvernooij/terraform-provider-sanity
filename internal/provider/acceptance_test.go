@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -24,6 +25,103 @@ func testAccPreCheck(t *testing.T) {
 	}
 }
 
+const examplesDir = "../../examples/resources"
+
+// loadExample reads an example .tf file and substitutes var.xxx references
+// with the provided replacements. Variable declaration blocks are stripped
+// so the resulting config is self-contained.
+func loadExample(t *testing.T, resourceName string, vars map[string]string) string {
+	t.Helper()
+	path := fmt.Sprintf("%s/%s/resource.tf", examplesDir, resourceName)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read example file %s: %s", path, err)
+	}
+	result := string(content)
+	for name, replacement := range vars {
+		result = replaceAll(result, "var."+name, replacement)
+	}
+	result = removeVariableBlocks(result)
+	return result
+}
+
+// replaceAll replaces all occurrences of old with new in s.
+// Wrapper to keep loadExample readable.
+func replaceAll(s, old, new string) string {
+	return regexp.MustCompile(regexp.QuoteMeta(old)).ReplaceAllLiteralString(s, new)
+}
+
+// removeVariableBlocks strips variable "..." { ... } declarations from HCL.
+var variableBlockRe = regexp.MustCompile(`(?ms)^variable\s+"[^"]+"\s*\{[^}]*\}\s*\n?`)
+
+func removeVariableBlocks(s string) string {
+	return variableBlockRe.ReplaceAllString(s, "")
+}
+
+// prerequisiteProject returns HCL for a project resource named "prereq".
+func prerequisiteProject(name string) string {
+	return fmt.Sprintf(`
+resource "sanity_project" "prereq" {
+  name = %q
+}
+`, name)
+}
+
+// prerequisiteProjectAndDataset returns HCL for a project + dataset named "prereq".
+func prerequisiteProjectAndDataset(projectName, datasetName string) string {
+	return fmt.Sprintf(`
+resource "sanity_project" "prereq" {
+  name = %q
+}
+
+resource "sanity_dataset" "prereq" {
+  project  = sanity_project.prereq.id
+  name     = %q
+  acl_mode = "public"
+}
+`, projectName, datasetName)
+}
+
+// --- Helper Tests ---
+
+func TestRemoveVariableBlocks(t *testing.T) {
+	input := `resource "sanity_project" "main" {
+  name = var.project_name
+}
+
+variable "project_name" {
+  description = "The name"
+  type        = string
+}
+
+variable "other" {
+  type = string
+}
+`
+	got := removeVariableBlocks(input)
+	if regexp.MustCompile(`variable\s+"`).MatchString(got) {
+		t.Errorf("variable blocks were not removed:\n%s", got)
+	}
+	if !regexp.MustCompile(`resource "sanity_project"`).MatchString(got) {
+		t.Errorf("resource block was incorrectly removed:\n%s", got)
+	}
+}
+
+func TestLoadExample(t *testing.T) {
+	config := loadExample(t, "sanity_project", map[string]string{
+		"project_name": `"my-test"`,
+	})
+	if regexp.MustCompile(`var\.project_name`).MatchString(config) {
+		t.Error("var.project_name was not replaced")
+	}
+	if !regexp.MustCompile(`"my-test"`).MatchString(config) {
+		t.Error("replacement value not found in output")
+	}
+	if regexp.MustCompile(`variable\s+"`).MatchString(config) {
+		t.Error("variable blocks were not stripped")
+	}
+}
+
 // --- Project ---
 
 func TestAccProject_basic(t *testing.T) {
@@ -34,16 +132,18 @@ func TestAccProject_basic(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProjectConfig(rName),
+				Config: loadExample(t, "sanity_project", map[string]string{
+					"project_name": fmt.Sprintf("%q", rName),
+				}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_project.test", "id"),
-					resource.TestCheckResourceAttr("sanity_project.test", "name", rName),
-					resource.TestCheckResourceAttr("sanity_project.test", "color", "#ff0000"),
+					resource.TestCheckResourceAttrSet("sanity_project.main", "id"),
+					resource.TestCheckResourceAttr("sanity_project.main", "name", rName),
+					resource.TestCheckResourceAttr("sanity_project.main", "color", "#0000ff"),
 				),
 			},
 			// Import
 			{
-				ResourceName:      "sanity_project.test",
+				ResourceName:      "sanity_project.main",
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
@@ -51,55 +151,36 @@ func TestAccProject_basic(t *testing.T) {
 	})
 }
 
-func testAccProjectConfig(name string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name  = %q
-  color = "#ff0000"
-}
-`, name)
-}
-
 // --- Dataset ---
 
 func TestAccDataset_basic(t *testing.T) {
-	rName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
-	projectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rDatasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDatasetConfig(projectName, rName),
+				Config: prerequisiteProject(rProjectName) +
+					loadExample(t, "sanity_dataset", map[string]string{
+						"project_id":   "sanity_project.prereq.id",
+						"dataset_name": fmt.Sprintf("%q", rDatasetName),
+					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("sanity_dataset.test", "name", rName),
-					resource.TestCheckResourceAttr("sanity_dataset.test", "acl_mode", "public"),
+					resource.TestCheckResourceAttr("sanity_dataset.main", "name", rDatasetName),
+					resource.TestCheckResourceAttr("sanity_dataset.main", "acl_mode", "public"),
 				),
 			},
 			// Import
 			{
-				ResourceName:      "sanity_dataset.test",
+				ResourceName:      "sanity_dataset.main",
 				ImportState:       true,
-				ImportStateIdFunc: testAccDatasetImportID("sanity_project.test", "sanity_dataset.test"),
+				ImportStateIdFunc: testAccDatasetImportID("sanity_project.prereq", "sanity_dataset.main"),
 				ImportStateVerify: true,
 			},
 		},
 	})
-}
-
-func testAccDatasetConfig(projectName, datasetName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_dataset" "test" {
-  project  = sanity_project.test.id
-  name     = %q
-  acl_mode = "public"
-}
-`, projectName, datasetName)
 }
 
 func testAccDatasetImportID(projectRes, datasetRes string) resource.ImportStateIdFunc {
@@ -119,122 +200,62 @@ func testAccDatasetImportID(projectRes, datasetRes string) resource.ImportStateI
 // --- CORS Origin ---
 
 func TestAccCORSOrigin_basic(t *testing.T) {
-	projectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCORSOriginConfig(projectName),
+				Config: prerequisiteProject(rProjectName) +
+					loadExample(t, "sanity_cors_origin", map[string]string{
+						"project_id": "sanity_project.prereq.id",
+					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_cors_origin.test", "id"),
-					resource.TestCheckResourceAttr("sanity_cors_origin.test", "origin", "https://terraform-test.example.com"),
-					resource.TestCheckResourceAttr("sanity_cors_origin.test", "allow_credentials", "true"),
+					resource.TestCheckResourceAttrSet("sanity_cors_origin.main", "id"),
+					resource.TestCheckResourceAttr("sanity_cors_origin.main", "origin", "https://example.com"),
+					resource.TestCheckResourceAttr("sanity_cors_origin.main", "allow_credentials", "true"),
 				),
 			},
 		},
 	})
-}
-
-func testAccCORSOriginConfig(projectName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_cors_origin" "test" {
-  project           = sanity_project.test.id
-  origin            = "https://terraform-test.example.com"
-  allow_credentials = true
-}
-`, projectName)
 }
 
 // --- Webhook ---
 
 func TestAccWebhook_basic(t *testing.T) {
-	projectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
-	datasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rDatasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccWebhookConfig(projectName, datasetName),
+				Config: prerequisiteProjectAndDataset(rProjectName, rDatasetName) +
+					loadExample(t, "sanity_webhook", map[string]string{
+						"project_id":     "sanity_project.prereq.id",
+						"dataset_name":   fmt.Sprintf("%q", rDatasetName),
+						"webhook_secret": `"test-secret-123"`,
+					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_webhook.test", "id"),
-					resource.TestCheckResourceAttr("sanity_webhook.test", "name", "TF Acceptance Test"),
-					resource.TestCheckResourceAttr("sanity_webhook.test", "url", "https://httpbin.org/post"),
-					resource.TestCheckResourceAttr("sanity_webhook.test", "http_method", "POST"),
-					resource.TestCheckResourceAttr("sanity_webhook.test", "filter", "_type == 'post'"),
-				),
-			},
-			// Update name and URL
-			{
-				Config: testAccWebhookConfigUpdated(projectName, datasetName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("sanity_webhook.test", "name", "TF Acceptance Test Updated"),
-					resource.TestCheckResourceAttr("sanity_webhook.test", "url", "https://httpbin.org/put"),
+					resource.TestCheckResourceAttrSet("sanity_webhook.main", "id"),
+					resource.TestCheckResourceAttr("sanity_webhook.main", "name", "Content Updates Webhook"),
+					resource.TestCheckResourceAttr("sanity_webhook.main", "url", "https://api.example.com/webhooks/sanity"),
+					resource.TestCheckResourceAttr("sanity_webhook.main", "http_method", "POST"),
+					resource.TestCheckResourceAttr("sanity_webhook.main", "filter", "_type == 'post'"),
 				),
 			},
 			// Import
 			{
-				ResourceName:            "sanity_webhook.test",
+				ResourceName:            "sanity_webhook.main",
 				ImportState:             true,
-				ImportStateIdFunc:       testAccWebhookImportID("sanity_project.test", "sanity_webhook.test"),
+				ImportStateIdFunc:       testAccWebhookImportID("sanity_project.prereq", "sanity_webhook.main"),
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"secret"},
 			},
 		},
 	})
-}
-
-func testAccWebhookConfig(projectName, datasetName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_dataset" "test" {
-  project  = sanity_project.test.id
-  name     = %q
-  acl_mode = "public"
-}
-
-resource "sanity_webhook" "test" {
-  project_id = sanity_project.test.id
-  name       = "TF Acceptance Test"
-  dataset    = sanity_dataset.test.name
-  url        = "https://httpbin.org/post"
-  filter     = "_type == 'post'"
-  secret     = "test-secret-123"
-}
-`, projectName, datasetName)
-}
-
-func testAccWebhookConfigUpdated(projectName, datasetName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_dataset" "test" {
-  project  = sanity_project.test.id
-  name     = %q
-  acl_mode = "public"
-}
-
-resource "sanity_webhook" "test" {
-  project_id = sanity_project.test.id
-  name       = "TF Acceptance Test Updated"
-  dataset    = sanity_dataset.test.name
-  url        = "https://httpbin.org/put"
-  filter     = "_type == 'post'"
-  secret     = "test-secret-123"
-}
-`, projectName, datasetName)
 }
 
 func testAccWebhookImportID(projectRes, webhookRes string) resource.ImportStateIdFunc {
@@ -254,148 +275,60 @@ func testAccWebhookImportID(projectRes, webhookRes string) resource.ImportStateI
 // --- Schema Type ---
 
 func TestAccSchemaType_basic(t *testing.T) {
-	projectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
-	datasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rDatasetName := fmt.Sprintf("tfacc%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSchemaTypeConfig(projectName, datasetName),
+				Config: prerequisiteProjectAndDataset(rProjectName, rDatasetName) +
+					loadExample(t, "sanity_schema_type", map[string]string{
+						"project_id":   "sanity_project.prereq.id",
+						"dataset_name": fmt.Sprintf("%q", rDatasetName),
+					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_schema_type.post", "id"),
-					resource.TestCheckResourceAttr("sanity_schema_type.post", "name", "post"),
-					resource.TestCheckResourceAttr("sanity_schema_type.post", "type", "document"),
-					resource.TestCheckResourceAttr("sanity_schema_type.post", "title", "Blog Post"),
-				),
-			},
-			// Update: add a field
-			{
-				Config: testAccSchemaTypeConfigUpdated(projectName, datasetName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("sanity_schema_type.post", "title", "Blog Post"),
-					resource.TestCheckResourceAttr("sanity_schema_type.post", "field.#", "3"),
+					// Verify the article type
+					resource.TestCheckResourceAttrSet("sanity_schema_type.article", "id"),
+					resource.TestCheckResourceAttr("sanity_schema_type.article", "name", "article"),
+					resource.TestCheckResourceAttr("sanity_schema_type.article", "type", "document"),
+					resource.TestCheckResourceAttr("sanity_schema_type.article", "title", "Article"),
+					resource.TestCheckResourceAttr("sanity_schema_type.article", "field.#", "6"),
+					// Verify the author type
+					resource.TestCheckResourceAttrSet("sanity_schema_type.author", "id"),
+					resource.TestCheckResourceAttr("sanity_schema_type.author", "name", "author"),
+					resource.TestCheckResourceAttr("sanity_schema_type.author", "type", "document"),
+					// Verify the category type
+					resource.TestCheckResourceAttrSet("sanity_schema_type.category", "id"),
+					resource.TestCheckResourceAttr("sanity_schema_type.category", "name", "category"),
+					resource.TestCheckResourceAttr("sanity_schema_type.category", "type", "document"),
 				),
 			},
 		},
 	})
-}
-
-func testAccSchemaTypeConfig(projectName, datasetName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_dataset" "test" {
-  project  = sanity_project.test.id
-  name     = %q
-  acl_mode = "public"
-}
-
-resource "sanity_schema_type" "post" {
-  project_id     = sanity_project.test.id
-  dataset        = sanity_dataset.test.name
-  workspace_name = "default"
-  version        = "2025-05-01"
-
-  name  = "post"
-  type  = "document"
-  title = "Blog Post"
-
-  field {
-    name  = "title"
-    type  = "string"
-    title = "Title"
-  }
-
-  field {
-    name  = "slug"
-    type  = "slug"
-    title = "Slug"
-    options = jsonencode({ source = "title" })
-  }
-}
-`, projectName, datasetName)
-}
-
-func testAccSchemaTypeConfigUpdated(projectName, datasetName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_dataset" "test" {
-  project  = sanity_project.test.id
-  name     = %q
-  acl_mode = "public"
-}
-
-resource "sanity_schema_type" "post" {
-  project_id     = sanity_project.test.id
-  dataset        = sanity_dataset.test.name
-  workspace_name = "default"
-  version        = "2025-05-01"
-
-  name  = "post"
-  type  = "document"
-  title = "Blog Post"
-
-  field {
-    name  = "title"
-    type  = "string"
-    title = "Title"
-  }
-
-  field {
-    name  = "slug"
-    type  = "slug"
-    title = "Slug"
-    options = jsonencode({ source = "title" })
-  }
-
-  field {
-    name  = "body"
-    type  = "array"
-    title = "Body"
-    of    = jsonencode([{ type = "block" }])
-  }
-}
-`, projectName, datasetName)
 }
 
 // --- Project Token ---
 
 func TestAccProjectToken_basic(t *testing.T) {
-	projectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+	rProjectName := fmt.Sprintf("tf-acc-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProjectTokenConfig(projectName),
+				Config: prerequisiteProject(rProjectName) +
+					loadExample(t, "sanity_project_token", map[string]string{
+						"project_id": "sanity_project.prereq.id",
+					}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_project_token.test", "id"),
-					resource.TestCheckResourceAttr("sanity_project_token.test", "label", "tf-acc-test"),
-					resource.TestCheckResourceAttrSet("sanity_project_token.test", "key"),
+					resource.TestCheckResourceAttrSet("sanity_project_token.main", "id"),
+					resource.TestCheckResourceAttr("sanity_project_token.main", "label", "Deployer token"),
+					resource.TestCheckResourceAttrSet("sanity_project_token.main", "key"),
 				),
 			},
 		},
 	})
-}
-
-func testAccProjectTokenConfig(projectName string) string {
-	return fmt.Sprintf(`
-resource "sanity_project" "test" {
-  name = %q
-}
-
-resource "sanity_project_token" "test" {
-  project   = sanity_project.test.id
-  label     = "tf-acc-test"
-  role_name = "viewer"
-}
-`, projectName)
 }
