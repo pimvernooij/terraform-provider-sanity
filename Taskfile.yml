@@ -1,0 +1,59 @@
+version: '3'
+
+tasks:
+  build-local:
+    desc: Build and install the provider locally for manual testing
+    cmds:
+      - go build -o terraform-provider-sanity_{{ .VERSION }}
+      - mkdir -p ~/.terraform.d/plugins/registry.terraform.io/labd/sanity/{{ .VERSION }}/{{ .PLATFORM }}/
+      - mv terraform-provider-sanity_{{ .VERSION }} ~/.terraform.d/plugins/registry.terraform.io/labd/sanity/{{ .VERSION }}/{{ .PLATFORM }}/terraform-provider-sanity_v{{ .VERSION }}
+      - cmd: codesign --deep --force -s - ~/.terraform.d/plugins/registry.terraform.io/labd/sanity/{{ .VERSION }}/{{ .PLATFORM }}/terraform-provider-sanity_v{{ .VERSION }}
+        platforms: [darwin]
+    vars:
+      VERSION: 99.0.0
+      PLATFORM:
+        sh: echo "$(go env GOOS)_$(go env GOARCH)"
+
+  build:
+    desc: Build a snapshot release binary using goreleaser
+    env:
+      GORELEASER_CURRENT_TAG: "v0.0.0"
+    cmd: goreleaser build --snapshot --clean --single-target --output terraform-provider-sanity
+
+  format:
+    desc: Format Go and Terraform files
+    cmds:
+      - go fmt ./...
+      - terraform fmt -recursive -write=true ./examples/
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test -v ./...
+
+  testacc:
+    desc: Run acceptance tests against a real Sanity environment
+    cmds:
+      - TF_ACC=1 go test -v ./internal/provider/ -run TestAcc -timeout 30m
+
+  docs:
+    desc: Generate provider documentation
+    cmds:
+      - go generate ./...
+
+  coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... ./...
+      - go tool cover -func=coverage.txt
+
+  coverage-html:
+    desc: Run tests with HTML coverage report
+    cmds:
+      - go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... ./...
+      - go tool cover -html=coverage.txt
+
+  lint:
+    desc: Run linters
+    cmds:
+      - go vet ./...
