@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -33,14 +34,17 @@ type WebhookResource struct {
 type WebhookResourceModel struct {
 	Id            types.String `tfsdk:"id"`
 	ProjectId     types.String `tfsdk:"project_id"`
+	Type          types.String `tfsdk:"type"`
 	Name          types.String `tfsdk:"name"`
 	Dataset       types.String `tfsdk:"dataset"`
 	URL           types.String `tfsdk:"url"`
 	HttpMethod    types.String `tfsdk:"http_method"`
 	ApiVersion    types.String `tfsdk:"api_version"`
+	On            types.List   `tfsdk:"on"`
+	Filter        types.String `tfsdk:"filter"`
+	Projection    types.String `tfsdk:"projection"`
 	IncludeDrafts types.Bool   `tfsdk:"include_drafts"`
 	Headers       types.Map    `tfsdk:"headers"`
-	Filter        types.String `tfsdk:"filter"`
 	Secret        types.String `tfsdk:"secret"`
 	IsDisabled    types.Bool   `tfsdk:"is_disabled"`
 	CreatedAt     types.String `tfsdk:"created_at"`
@@ -70,12 +74,18 @@ func (r *WebhookResource) Schema(ctx context.Context, req resource.SchemaRequest
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"type": schema.StringAttribute{
+				MarkdownDescription: "The webhook type. Must be `document` (GROQ-powered) or `transaction`. Defaults to `document`.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("document"),
+			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The human-readable name for the webhook.",
 				Required:            true,
 			},
 			"dataset": schema.StringAttribute{
-				MarkdownDescription: "The dataset this webhook is configured for.",
+				MarkdownDescription: "The dataset this webhook is configured for. Use `*` for all datasets.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -86,18 +96,30 @@ func (r *WebhookResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Required:            true,
 			},
 			"http_method": schema.StringAttribute{
-				MarkdownDescription: "The HTTP method used for webhook requests. Defaults to `POST`.",
+				MarkdownDescription: "The HTTP method used for webhook requests. One of `POST`, `PUT`, `PATCH`, `DELETE`, `GET`. Defaults to `POST`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("POST"),
 			},
 			"api_version": schema.StringAttribute{
-				MarkdownDescription: "The API version used for webhook payloads. Defaults to the current API version.",
+				MarkdownDescription: "The API version used for the GROQ filter and projection. Defaults to `v2025-02-19`.",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				Default:             stringdefault.StaticString("v2025-02-19"),
+			},
+			"on": schema.ListAttribute{
+				MarkdownDescription: "The document events that trigger the webhook. Valid values: `create`, `update`, `delete`. Defaults to all three.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
+			"filter": schema.StringAttribute{
+				MarkdownDescription: "A GROQ filter expression to determine which documents trigger the webhook.",
+				Optional:            true,
+			},
+			"projection": schema.StringAttribute{
+				MarkdownDescription: "A GROQ projection defining the webhook payload.",
+				Optional:            true,
 			},
 			"include_drafts": schema.BoolAttribute{
 				MarkdownDescription: "Whether draft documents trigger webhook notifications. Defaults to `false`.",
@@ -110,12 +132,8 @@ func (r *WebhookResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
-			"filter": schema.StringAttribute{
-				MarkdownDescription: "A GROQ filter expression to determine which documents trigger the webhook.",
-				Optional:            true,
-			},
 			"secret": schema.StringAttribute{
-				MarkdownDescription: "Secret used for webhook signature verification.",
+				MarkdownDescription: "Secret used for webhook signature verification. Not returned by the API after creation.",
 				Optional:            true,
 				Sensitive:           true,
 			},
@@ -141,19 +159,16 @@ func (r *WebhookResource) Schema(ctx context.Context, req resource.SchemaRequest
 }
 
 func (r *WebhookResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
 	}
 
 	clients, ok := req.ProviderData.(*ProviderClients)
-
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
 			fmt.Sprintf("Expected *ProviderClients, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
-
 		return
 	}
 
@@ -164,21 +179,12 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	var data *WebhookResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Convert headers map from Terraform types to Go strings
-	headers := make(map[string]string)
-	if !data.Headers.IsNull() && !data.Headers.IsUnknown() {
-		resp.Diagnostics.Append(data.Headers.ElementsAs(ctx, &headers, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-
 	createReq := &sanity.CreateWebhookRequest{
+		Type:    data.Type.ValueString(),
 		Name:    data.Name.ValueString(),
 		Dataset: data.Dataset.ValueString(),
 		URL:     data.URL.ValueString(),
@@ -187,23 +193,40 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	if !data.HttpMethod.IsNull() {
 		createReq.HttpMethod = data.HttpMethod.ValueString()
 	}
-	if !data.ApiVersion.IsNull() {
+	if !data.ApiVersion.IsNull() && !data.ApiVersion.IsUnknown() {
 		createReq.ApiVersion = data.ApiVersion.ValueString()
 	}
 	if !data.IncludeDrafts.IsNull() {
 		createReq.IncludeDrafts = sanity.NewBool(data.IncludeDrafts.ValueBool())
 	}
-	if len(headers) > 0 {
-		createReq.Headers = headers
-	}
-	if !data.Filter.IsNull() {
-		if createReq.Rule == nil {
-			createReq.Rule = &sanity.WebhookRule{}
+
+	// Headers
+	if !data.Headers.IsNull() && !data.Headers.IsUnknown() {
+		headers := make(map[string]string)
+		resp.Diagnostics.Append(data.Headers.ElementsAs(ctx, &headers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
-		createReq.Rule.Filter = data.Filter.ValueString()
+		if len(headers) > 0 {
+			createReq.Headers = headers
+		}
 	}
+
+	// Build rule from on, filter, projection
+	rule, diags := r.buildRule(ctx, data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if rule != nil {
+		createReq.Rule = rule
+	}
+
 	if !data.Secret.IsNull() {
 		createReq.Secret = data.Secret.ValueString()
+	}
+	if !data.IsDisabled.IsNull() && data.IsDisabled.ValueBool() {
+		createReq.IsDisabledByUser = sanity.NewBool(true)
 	}
 
 	webhook, err := r.client.Webhooks.Create(ctx, data.ProjectId.ValueString(), createReq)
@@ -222,9 +245,7 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 func (r *WebhookResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data *WebhookResourceModel
 
-	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -249,7 +270,6 @@ func (r *WebhookResource) Update(ctx context.Context, req resource.UpdateRequest
 	var data *WebhookResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -259,29 +279,20 @@ func (r *WebhookResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	updateReq := &sanity.UpdateWebhookRequest{}
-	requiresUpdate := false
+	updateReq := &sanity.UpdateWebhookRequest{
+		Name:       data.Name.ValueString(),
+		URL:        data.URL.ValueString(),
+		HttpMethod: data.HttpMethod.ValueString(),
+	}
 
-	if !data.Name.IsNull() {
-		updateReq.Name = data.Name.ValueString()
-		requiresUpdate = true
-	}
-	if !data.URL.IsNull() {
-		updateReq.URL = data.URL.ValueString()
-		requiresUpdate = true
-	}
-	if !data.HttpMethod.IsNull() {
-		updateReq.HttpMethod = data.HttpMethod.ValueString()
-		requiresUpdate = true
-	}
-	if !data.ApiVersion.IsNull() {
+	if !data.ApiVersion.IsNull() && !data.ApiVersion.IsUnknown() {
 		updateReq.ApiVersion = data.ApiVersion.ValueString()
-		requiresUpdate = true
 	}
 	if !data.IncludeDrafts.IsNull() {
 		updateReq.IncludeDrafts = sanity.NewBool(data.IncludeDrafts.ValueBool())
-		requiresUpdate = true
 	}
+
+	// Headers
 	if !data.Headers.IsNull() && !data.Headers.IsUnknown() {
 		headers := make(map[string]string)
 		resp.Diagnostics.Append(data.Headers.ElementsAs(ctx, &headers, false)...)
@@ -290,27 +301,24 @@ func (r *WebhookResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 		if len(headers) > 0 {
 			updateReq.Headers = headers
-			requiresUpdate = true
 		}
 	}
-	if !data.Filter.IsNull() {
-		if updateReq.Rule == nil {
-			updateReq.Rule = &sanity.WebhookRule{}
-		}
-		updateReq.Rule.Filter = data.Filter.ValueString()
-		requiresUpdate = true
+
+	// Build rule from on, filter, projection
+	rule, diags := r.buildRule(ctx, data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
+	if rule != nil {
+		updateReq.Rule = rule
+	}
+
 	if !data.Secret.IsNull() {
 		updateReq.Secret = data.Secret.ValueString()
-		requiresUpdate = true
 	}
 	if !data.IsDisabled.IsNull() {
 		updateReq.IsDisabledByUser = sanity.NewBool(data.IsDisabled.ValueBool())
-		requiresUpdate = true
-	}
-
-	if !requiresUpdate {
-		return
 	}
 
 	webhook, err := r.client.Webhooks.Update(ctx, data.ProjectId.ValueString(), data.Id.ValueString(), updateReq)
@@ -328,7 +336,6 @@ func (r *WebhookResource) Delete(ctx context.Context, req resource.DeleteRequest
 	var data *WebhookResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -339,10 +346,14 @@ func (r *WebhookResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	_, err := r.client.Webhooks.Delete(ctx, data.ProjectId.ValueString(), data.Id.ValueString())
-
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("webhook %s could not be deleted, got error: %s", data.Id.ValueString(), err))
-		return
+		// The Sanity API returns {"deleted": 1} (number) but go-sanity expects
+		// a bool, causing a decode error. The delete succeeded if the error is
+		// just a JSON unmarshal issue.
+		if !strings.Contains(err.Error(), "cannot unmarshal") {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("webhook %s could not be deleted, got error: %s", data.Id.ValueString(), err))
+			return
+		}
 	}
 }
 
@@ -357,12 +368,47 @@ func (r *WebhookResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-// updateModelFromWebhook updates the Terraform model with data from the API webhook struct
+// buildRule constructs the WebhookRule from on, filter, and projection attributes.
+// Returns nil if no rule-related attributes are set.
+func (r *WebhookResource) buildRule(ctx context.Context, data *WebhookResourceModel) (*sanity.WebhookRule, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	hasFilter := !data.Filter.IsNull() && !data.Filter.IsUnknown()
+	hasProjection := !data.Projection.IsNull() && !data.Projection.IsUnknown()
+	hasOn := !data.On.IsNull() && !data.On.IsUnknown()
+
+	if !hasFilter && !hasProjection && !hasOn {
+		return nil, diags
+	}
+
+	rule := &sanity.WebhookRule{}
+
+	if hasOn {
+		var on []string
+		diags.Append(data.On.ElementsAs(ctx, &on, false)...)
+		rule.On = on
+	} else {
+		// Default to all events when rule is present but on is not specified
+		rule.On = []string{"create", "update", "delete"}
+	}
+
+	if hasFilter {
+		rule.Filter = data.Filter.ValueString()
+	}
+	if hasProjection {
+		rule.Projection = data.Projection.ValueString()
+	}
+
+	return rule, diags
+}
+
+// updateModelFromWebhook updates the Terraform model with data from the API webhook struct.
 func (r *WebhookResource) updateModelFromWebhook(ctx context.Context, data *WebhookResourceModel, webhook *sanity.Webhook) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	data.Id = types.StringValue(webhook.Id)
 	data.ProjectId = types.StringValue(webhook.ProjectId)
+	data.Type = types.StringValue(webhook.Type)
 	data.Name = types.StringValue(webhook.Name)
 	data.Dataset = types.StringValue(webhook.Dataset)
 	data.URL = types.StringValue(webhook.URL)
@@ -370,17 +416,46 @@ func (r *WebhookResource) updateModelFromWebhook(ctx context.Context, data *Webh
 	data.ApiVersion = types.StringValue(webhook.ApiVersion)
 	data.IncludeDrafts = types.BoolValue(webhook.IncludeDrafts)
 	data.IsDisabled = types.BoolValue(webhook.IsDisabled)
-	data.CreatedAt = types.StringValue(webhook.CreatedAt.Format("2006-01-02T15:04:05Z"))
-	data.UpdatedAt = types.StringValue(webhook.UpdatedAt.Format("2006-01-02T15:04:05Z"))
 
-	// Set filter from Rule - use null for empty/absent filter since it's an optional field
-	if webhook.Rule != nil && webhook.Rule.Filter != "" {
-		data.Filter = types.StringValue(webhook.Rule.Filter)
+	if !webhook.CreatedAt.IsZero() {
+		data.CreatedAt = types.StringValue(webhook.CreatedAt.Format("2006-01-02T15:04:05Z"))
+	}
+	if !webhook.UpdatedAt.IsZero() {
+		data.UpdatedAt = types.StringValue(webhook.UpdatedAt.Format("2006-01-02T15:04:05Z"))
 	} else {
-		data.Filter = types.StringNull()
+		data.UpdatedAt = types.StringNull()
 	}
 
-	// Convert headers map from Go strings to Terraform types
+	// Rule → on, filter, projection
+	if webhook.Rule != nil {
+		if len(webhook.Rule.On) > 0 {
+			elems := make([]attr.Value, len(webhook.Rule.On))
+			for i, v := range webhook.Rule.On {
+				elems[i] = types.StringValue(v)
+			}
+			data.On = types.ListValueMust(types.StringType, elems)
+		} else {
+			data.On = types.ListNull(types.StringType)
+		}
+
+		if webhook.Rule.Filter != "" {
+			data.Filter = types.StringValue(webhook.Rule.Filter)
+		} else {
+			data.Filter = types.StringNull()
+		}
+
+		if webhook.Rule.Projection != "" {
+			data.Projection = types.StringValue(webhook.Rule.Projection)
+		} else {
+			data.Projection = types.StringNull()
+		}
+	} else {
+		data.On = types.ListNull(types.StringType)
+		data.Filter = types.StringNull()
+		data.Projection = types.StringNull()
+	}
+
+	// Headers
 	if webhook.Headers != nil && len(webhook.Headers) > 0 {
 		mapVal, d := types.MapValueFrom(ctx, types.StringType, webhook.Headers)
 		diags.Append(d...)
@@ -389,10 +464,8 @@ func (r *WebhookResource) updateModelFromWebhook(ctx context.Context, data *Webh
 		data.Headers = types.MapNull(types.StringType)
 	}
 
-	// Preserve the secret from state since it's not returned by the API
-	if webhook.Secret != "" {
-		data.Secret = types.StringValue(webhook.Secret)
-	}
+	// Secret is write-only; preserve existing state value
+	// (API does not return the secret after creation)
 
 	return diags
 }

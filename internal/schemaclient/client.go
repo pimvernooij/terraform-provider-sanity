@@ -38,12 +38,17 @@ type SchemaDocument struct {
 	Schema    json.RawMessage `json:"schema"`
 }
 
-// PutSchemasRequest is the request body for upserting schemas.
-type PutSchemasRequest struct {
+// SchemaEntry is a single schema entry in a PUT request.
+type SchemaEntry struct {
 	Workspace SchemaWorkspace `json:"workspace"`
 	Schema    json.RawMessage `json:"schema"`
 	Version   string          `json:"version"`
 	Tag       string          `json:"tag,omitempty"`
+}
+
+// putSchemasBody is the top-level PUT request body.
+type putSchemasBody struct {
+	Schemas []SchemaEntry `json:"schemas"`
 }
 
 func (c *Client) schemasURL(projectID, dataset string) string {
@@ -100,17 +105,41 @@ func (c *Client) GetSchema(ctx context.Context, projectID, dataset, schemaID str
 		return nil, err
 	}
 
-	var doc SchemaDocument
-	if err := c.do(req, &doc); err != nil {
+	// The API may return either a single object or an array.
+	// Try single object first, fall back to array.
+	var raw json.RawMessage
+	if err := c.do(req, &raw); err != nil {
 		return nil, err
 	}
-	return &doc, nil
+
+	// Try to decode as single document
+	var doc SchemaDocument
+	if err := json.Unmarshal(raw, &doc); err == nil && doc.ID != "" {
+		return &doc, nil
+	}
+
+	// Fall back to array
+	var docs []SchemaDocument
+	if err := json.Unmarshal(raw, &docs); err != nil {
+		return nil, fmt.Errorf("decoding schema response: %w", err)
+	}
+	for i := range docs {
+		if docs[i].ID == schemaID {
+			return &docs[i], nil
+		}
+	}
+	if len(docs) > 0 {
+		return &docs[0], nil
+	}
+	return nil, fmt.Errorf("schema %s not found", schemaID)
 }
 
-// PutSchemas upserts schemas for a project/dataset. Returns the resulting schema documents.
-func (c *Client) PutSchemas(ctx context.Context, projectID, dataset string, putReq *PutSchemasRequest) ([]SchemaDocument, error) {
-	// The API expects an array of schema entries
-	payload := []PutSchemasRequest{*putReq}
+// PutSchemas upserts a schema for a project/dataset. Returns the resulting schema document.
+// The API expects: {"schemas": [{workspace, schema, version, tag}]}
+func (c *Client) PutSchemas(ctx context.Context, projectID, dataset string, entry *SchemaEntry) (*SchemaDocument, error) {
+	payload := putSchemasBody{
+		Schemas: []SchemaEntry{*entry},
+	}
 
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -123,11 +152,11 @@ func (c *Client) PutSchemas(ctx context.Context, projectID, dataset string, putR
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	var docs []SchemaDocument
-	if err := c.do(req, &docs); err != nil {
+	var doc SchemaDocument
+	if err := c.do(req, &doc); err != nil {
 		return nil, err
 	}
-	return docs, nil
+	return &doc, nil
 }
 
 // DeleteSchema deletes a schema document by ID.

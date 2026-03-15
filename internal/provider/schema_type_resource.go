@@ -18,19 +18,26 @@ import (
 	"github.com/tessellator/terraform-provider-sanity/internal/schemaclient"
 )
 
-// schemaMutexes prevents concurrent read-modify-write on the same schema document.
+// schemaLock holds both a mutex and a cached copy of the schema types
+// so that sequential read-modify-write operations don't suffer from API
+// eventual consistency (a fresh GET right after PUT may return stale data).
+type schemaLock struct {
+	mu          sync.Mutex
+	cachedTypes []map[string]interface{} // nil = no cache
+}
+
 var (
-	schemaMutexes   = map[string]*sync.Mutex{}
-	schemaMutexesMu sync.Mutex
+	schemaLocks   = map[string]*schemaLock{}
+	schemaLocksMu sync.Mutex
 )
 
-func getSchemaMutex(key string) *sync.Mutex {
-	schemaMutexesMu.Lock()
-	defer schemaMutexesMu.Unlock()
-	if schemaMutexes[key] == nil {
-		schemaMutexes[key] = &sync.Mutex{}
+func getSchemaLock(key string) *schemaLock {
+	schemaLocksMu.Lock()
+	defer schemaLocksMu.Unlock()
+	if schemaLocks[key] == nil {
+		schemaLocks[key] = &schemaLock{}
 	}
-	return schemaMutexes[key]
+	return schemaLocks[key]
 }
 
 var _ resource.Resource = &SchemaTypeResource{}
@@ -244,13 +251,13 @@ func (r *SchemaTypeResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	mu := getSchemaMutex(data.schemaKey())
-	mu.Lock()
-	defer mu.Unlock()
+	lock := getSchemaLock(data.schemaKey())
+	lock.mu.Lock()
+	defer lock.mu.Unlock()
 
 	typeDef := data.toTypeDefinition()
 
-	err := r.mergeType(ctx, &data, typeDef)
+	err := r.mergeType(ctx, &data, typeDef, lock)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create schema type: %s", err))
 		return
@@ -268,6 +275,25 @@ func (r *SchemaTypeResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	typeName := data.Name.ValueString()
+
+	// First check the in-process cache — it reflects the most recent writes
+	// and avoids stale reads from API eventual consistency.
+	lock := getSchemaLock(data.schemaKey())
+	lock.mu.Lock()
+	if lock.cachedTypes != nil {
+		for _, t := range lock.cachedTypes {
+			if name, _ := t["name"].(string); name == typeName {
+				lock.mu.Unlock()
+				data.updateFromTypeDef(t)
+				resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+				return
+			}
+		}
+	}
+	lock.mu.Unlock()
+
+	// Cache miss or type not in cache — read from API
 	schemaID := schemaclient.SchemaID(data.WorkspaceName.ValueString(), data.Tag.ValueString())
 	doc, err := r.client.GetSchema(ctx, data.ProjectID.ValueString(), data.Dataset.ValueString(), schemaID)
 	if err != nil {
@@ -293,13 +319,13 @@ func (r *SchemaTypeResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	mu := getSchemaMutex(data.schemaKey())
-	mu.Lock()
-	defer mu.Unlock()
+	lock := getSchemaLock(data.schemaKey())
+	lock.mu.Lock()
+	defer lock.mu.Unlock()
 
 	typeDef := data.toTypeDefinition()
 
-	err := r.mergeType(ctx, &data, typeDef)
+	err := r.mergeType(ctx, &data, typeDef, lock)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update schema type: %s", err))
 		return
@@ -315,24 +341,30 @@ func (r *SchemaTypeResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	mu := getSchemaMutex(data.schemaKey())
-	mu.Lock()
-	defer mu.Unlock()
+	lock := getSchemaLock(data.schemaKey())
+	lock.mu.Lock()
+	defer lock.mu.Unlock()
 
 	projectID := data.ProjectID.ValueString()
 	dataset := data.Dataset.ValueString()
 	schemaID := schemaclient.SchemaID(data.WorkspaceName.ValueString(), data.Tag.ValueString())
 
-	doc, err := r.client.GetSchema(ctx, projectID, dataset, schemaID)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema for deletion: %s", err))
-		return
-	}
-
+	// Use cached schema if available, otherwise fetch from API
 	var schemaTypes []map[string]interface{}
-	if err := json.Unmarshal(doc.Schema, &schemaTypes); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse schema: %s", err))
-		return
+	if lock.cachedTypes != nil {
+		schemaTypes = lock.cachedTypes
+	} else {
+		doc, err := r.client.GetSchema(ctx, projectID, dataset, schemaID)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema for deletion: %s", err))
+			return
+		}
+
+		schemaTypes, err = parseSchemaTypes(doc.Schema)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse schema: %s", err))
+			return
+		}
 	}
 
 	// Remove this type
@@ -345,18 +377,21 @@ func (r *SchemaTypeResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 
 	newSchema, _ := json.Marshal(filtered)
-	putReq := &schemaclient.PutSchemasRequest{
+	putReq := &schemaclient.SchemaEntry{
 		Workspace: schemaclient.SchemaWorkspace{Name: data.WorkspaceName.ValueString()},
 		Schema:    json.RawMessage(newSchema),
 		Version:   data.Version.ValueString(),
 		Tag:       data.Tag.ValueString(),
 	}
 
-	_, err = r.client.PutSchemas(ctx, projectID, dataset, putReq)
+	_, err := r.client.PutSchemas(ctx, projectID, dataset, putReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove type from schema: %s", err))
 		return
 	}
+
+	// Update cache
+	lock.cachedTypes = filtered
 }
 
 func (r *SchemaTypeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -381,18 +416,26 @@ func (r *SchemaTypeResource) ImportState(ctx context.Context, req resource.Impor
 }
 
 // mergeType reads the current schema, adds/replaces this type, and PUTs back.
-func (r *SchemaTypeResource) mergeType(ctx context.Context, data *SchemaTypeResourceModel, typeDef map[string]interface{}) error {
+// It uses the lock's cached schema to avoid stale reads from API eventual consistency.
+func (r *SchemaTypeResource) mergeType(ctx context.Context, data *SchemaTypeResourceModel, typeDef map[string]interface{}, lock *schemaLock) error {
 	projectID := data.ProjectID.ValueString()
 	dataset := data.Dataset.ValueString()
 	schemaID := schemaclient.SchemaID(data.WorkspaceName.ValueString(), data.Tag.ValueString())
 
 	var schemaTypes []map[string]interface{}
 
-	// Try to read existing schema; if it doesn't exist, start empty
-	doc, err := r.client.GetSchema(ctx, projectID, dataset, schemaID)
-	if err == nil {
-		if err := json.Unmarshal(doc.Schema, &schemaTypes); err != nil {
-			return fmt.Errorf("parsing existing schema: %w", err)
+	// Use cached schema if available (avoids stale reads from eventual consistency)
+	if lock.cachedTypes != nil {
+		schemaTypes = make([]map[string]interface{}, len(lock.cachedTypes))
+		copy(schemaTypes, lock.cachedTypes)
+	} else {
+		// Try to read existing schema; if it doesn't exist, start empty
+		doc, err := r.client.GetSchema(ctx, projectID, dataset, schemaID)
+		if err == nil {
+			schemaTypes, err = parseSchemaTypes(doc.Schema)
+			if err != nil {
+				return fmt.Errorf("parsing existing schema: %w", err)
+			}
 		}
 	}
 
@@ -411,15 +454,28 @@ func (r *SchemaTypeResource) mergeType(ctx context.Context, data *SchemaTypeReso
 	}
 
 	newSchema, _ := json.Marshal(schemaTypes)
-	putReq := &schemaclient.PutSchemasRequest{
+	putReq := &schemaclient.SchemaEntry{
 		Workspace: schemaclient.SchemaWorkspace{Name: data.WorkspaceName.ValueString()},
 		Schema:    json.RawMessage(newSchema),
 		Version:   data.Version.ValueString(),
 		Tag:       data.Tag.ValueString(),
 	}
 
-	_, err = r.client.PutSchemas(ctx, projectID, dataset, putReq)
-	return err
+	doc, err := r.client.PutSchemas(ctx, projectID, dataset, putReq)
+	if err != nil {
+		return err
+	}
+
+	// Prefer the API response as source of truth for the cache; fall back
+	// to the locally-built slice if the response can't be parsed.
+	if doc != nil {
+		if respTypes, parseErr := parseSchemaTypes(doc.Schema); parseErr == nil {
+			lock.cachedTypes = respTypes
+			return nil
+		}
+	}
+	lock.cachedTypes = schemaTypes
+	return nil
 }
 
 // schemaKey returns a unique key for the mutex map.
@@ -542,10 +598,31 @@ func fieldBaseToJSON(name, typ, title, description types.String, hidden, readonl
 	return fd
 }
 
+// parseSchemaTypes parses the schema field from the API response.
+// The API may return either a raw JSON array or a JSON string containing
+// a serialized array. This helper handles both cases.
+func parseSchemaTypes(raw json.RawMessage) ([]map[string]interface{}, error) {
+	// Try direct array first
+	var types []map[string]interface{}
+	if err := json.Unmarshal(raw, &types); err == nil {
+		return types, nil
+	}
+
+	// Fall back to string-encoded JSON
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return nil, fmt.Errorf("schema field is neither a JSON array nor a string: %s", string(raw))
+	}
+	if err := json.Unmarshal([]byte(s), &types); err != nil {
+		return nil, fmt.Errorf("schema string is not a valid JSON array: %w", err)
+	}
+	return types, nil
+}
+
 // findTypeInSchema finds a type by name in the schema JSON array.
 func findTypeInSchema(schemaJSON json.RawMessage, typeName string) (map[string]interface{}, error) {
-	var types []map[string]interface{}
-	if err := json.Unmarshal(schemaJSON, &types); err != nil {
+	types, err := parseSchemaTypes(schemaJSON)
+	if err != nil {
 		return nil, err
 	}
 	for _, t := range types {

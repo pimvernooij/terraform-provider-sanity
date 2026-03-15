@@ -2,7 +2,7 @@ resource "sanity_webhook" "main" {
   project_id     = var.project_id
   name           = "Content Updates Webhook"
   dataset        = var.dataset_name
-  url            = "https://api.example.com/webhooks/sanity"
+  url            = "https://example.com/webhooks/sanity"
   http_method    = "POST"
   include_drafts = false
   filter         = "_type == 'post'"

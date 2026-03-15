@@ -131,19 +131,24 @@ replay HTTP interactions. This means CI and local development don't need a real
 Sanity API token — tests replay from pre-recorded YAML cassettes stored in
 `internal/provider/testdata/cassettes/`.
 
+Tests run against a **pre-existing Sanity project** (the API does not support
+creating projects programmatically). The project ID is passed via the
+`SANITY_PROJECT_ID` environment variable.
+
 **Replaying cassettes** (default — no API token needed):
 
 ```sh
-task testacc
+SANITY_PROJECT_ID=<project-id> task testacc
 ```
 
-This replays the committed cassettes. If a cassette is missing for a test, that
-test will fail. Cassettes must be recorded first.
+This replays the committed cassettes. The `SANITY_PROJECT_ID` must match the
+project ID that was used when the cassettes were recorded. If a cassette is
+missing for a test, that test will fail.
 
 **Recording cassettes** (requires a real Sanity account):
 
 ```sh
-SANITY_TOKEN=<your-token> task testacc-record
+SANITY_TOKEN=<your-token> SANITY_PROJECT_ID=<your-project-id> task testacc-record
 ```
 
 This runs every acceptance test against the live Sanity API and writes the HTTP
@@ -159,10 +164,10 @@ that `task testacc` can replay them.
 
 **How it works:**
 
-| Command | Mode | API calls | Token needed |
-|---------|------|-----------|--------------|
-| `task testacc` | `ModeReplayOnly` | None — replays cassettes | No (`test-token` placeholder) |
-| `task testacc-record` | `ModeRecordOnly` | Real HTTP to Sanity API | Yes (`SANITY_TOKEN`) |
+| Command | Mode | API calls | Env vars needed |
+|---------|------|-----------|-----------------|
+| `task testacc` | `ModeReplayOnly` | None — replays cassettes | `SANITY_PROJECT_ID` |
+| `task testacc-record` | `ModeRecordOnly` | Real HTTP to Sanity API | `SANITY_TOKEN`, `SANITY_PROJECT_ID` |
 
 ### Running locally
 

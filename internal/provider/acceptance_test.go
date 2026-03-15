@@ -81,11 +81,21 @@ func providerFactoriesWithRecorder(t *testing.T, cassetteName string) (map[strin
 }
 
 // testAccPreCheck validates required environment variables are set.
-// During replay, SANITY_TOKEN can be a dummy value.
+// During replay, SANITY_TOKEN and SANITY_PROJECT_ID can be dummy/placeholder values.
 func testAccPreCheck(t *testing.T) {
 	if v := os.Getenv("SANITY_TOKEN"); v == "" {
 		t.Fatal("SANITY_TOKEN must be set for acceptance tests")
 	}
+	if v := os.Getenv("SANITY_PROJECT_ID"); v == "" {
+		t.Fatal("SANITY_PROJECT_ID must be set for acceptance tests")
+	}
+}
+
+// testAccProjectID returns the project ID from the SANITY_PROJECT_ID env var.
+// During recording this must be a real Sanity project ID. During replay it
+// must match the project ID baked into the recorded cassettes.
+func testAccProjectID() string {
+	return os.Getenv("SANITY_PROJECT_ID")
 }
 
 // loadExample reads an example .tf file and substitutes var.xxx references
@@ -156,63 +166,33 @@ func TestLoadExample(t *testing.T) {
 	}
 }
 
-// --- Project (standalone) ---
-
-// TestAccProject_basic tests project creation and import in isolation.
-func TestAccProject_basic(t *testing.T) {
-	f, stop := providerFactoriesWithRecorder(t, "TestAccProject_basic")
-	defer stop()
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: f,
-		Steps: []resource.TestStep{
-			{
-				Config: loadExample(t, "sanity_project", map[string]string{
-					"project_name": `"tf-vcr-project"`,
-				}),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("sanity_project.main", "id"),
-					resource.TestCheckResourceAttr("sanity_project.main", "name", "tf-vcr-project"),
-					resource.TestCheckResourceAttr("sanity_project.main", "color", "#0000ff"),
-				),
-			},
-			// Import
-			{
-				ResourceName:      "sanity_project.main",
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
-		},
-	})
-}
-
 // --- All resources within a single project ---
 
-// testAccBaseConfig returns HCL for the shared project that all child
-// resources depend on. This mirrors real-world usage: one project
-// containing datasets, CORS origins, webhooks, tokens, and schemas.
+// testAccBaseConfig returns HCL that looks up a pre-existing Sanity project.
+// The project cannot be created via the API, so tests use a data source.
 func testAccBaseConfig() string {
-	return `
-resource "sanity_project" "test" {
-  name = "tf-vcr-project"
+	return fmt.Sprintf(`
+data "sanity_project" "test" {
+  id = "%s"
 }
-`
+`, testAccProjectID())
 }
 
-// TestAccProjectResources tests all resource types within a single project.
-// One cassette, one project — matching real-world usage.
+// TestAccProjectResources tests all resource types within a pre-existing project.
+// One cassette, one project — matching real-world usage. The project is
+// referenced via data source because the Sanity API does not support creating
+// projects programmatically.
 func TestAccProjectResources(t *testing.T) {
 	f, stop := providerFactoriesWithRecorder(t, "TestAccProjectResources")
 	defer stop()
 
 	vars := map[string]string{
-		"project_id":   "sanity_project.test.id",
+		"project_id":   "data.sanity_project.test.id",
 		"dataset_name": "sanity_dataset.main.name",
 	}
 
 	webhookVars := map[string]string{
-		"project_id":     "sanity_project.test.id",
+		"project_id":     "data.sanity_project.test.id",
 		"dataset_name":   "sanity_dataset.main.name",
 		"webhook_secret": `"test-secret-123"`,
 	}
@@ -221,7 +201,7 @@ func TestAccProjectResources(t *testing.T) {
 	// and other resources that need a dataset reference it via its name.
 	config := testAccBaseConfig() +
 		loadExample(t, "sanity_dataset", map[string]string{
-			"project_id":   "sanity_project.test.id",
+			"project_id":   "data.sanity_project.test.id",
 			"dataset_name": `"tfvcr"`,
 		}) +
 		loadExample(t, "sanity_cors_origin", vars) +
@@ -236,9 +216,9 @@ func TestAccProjectResources(t *testing.T) {
 			{
 				Config: config,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Project
-					resource.TestCheckResourceAttrSet("sanity_project.test", "id"),
-					resource.TestCheckResourceAttr("sanity_project.test", "name", "tf-vcr-project"),
+					// Project (data source — verify it was read)
+					resource.TestCheckResourceAttrSet("data.sanity_project.test", "id"),
+					resource.TestCheckResourceAttrSet("data.sanity_project.test", "name"),
 
 					// Dataset (from example)
 					resource.TestCheckResourceAttr("sanity_dataset.main", "name", "tfvcr"),
@@ -252,7 +232,7 @@ func TestAccProjectResources(t *testing.T) {
 					// Webhook (from example)
 					resource.TestCheckResourceAttrSet("sanity_webhook.main", "id"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "name", "Content Updates Webhook"),
-					resource.TestCheckResourceAttr("sanity_webhook.main", "url", "https://api.example.com/webhooks/sanity"),
+					resource.TestCheckResourceAttr("sanity_webhook.main", "url", "https://example.com/webhooks/sanity"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "http_method", "POST"),
 					resource.TestCheckResourceAttr("sanity_webhook.main", "filter", "_type == 'post'"),
 
@@ -273,18 +253,19 @@ func TestAccProjectResources(t *testing.T) {
 					resource.TestCheckResourceAttr("sanity_schema_type.category", "name", "category"),
 				),
 			},
-			// Import: dataset
+			// Import: dataset (no "id" attribute — use "name" as identifier)
 			{
-				ResourceName:      "sanity_dataset.main",
-				ImportState:       true,
-				ImportStateIdFunc: testAccImportID("sanity_project.test", "sanity_dataset.main", "name"),
-				ImportStateVerify: true,
+				ResourceName:                         "sanity_dataset.main",
+				ImportState:                          true,
+				ImportStateIdFunc:                    testAccImportID("sanity_dataset.main", "name"),
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "name",
 			},
 			// Import: webhook
 			{
 				ResourceName:            "sanity_webhook.main",
 				ImportState:             true,
-				ImportStateIdFunc:       testAccImportID("sanity_project.test", "sanity_webhook.main", "id"),
+				ImportStateIdFunc:       testAccImportID("sanity_webhook.main", "id"),
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"secret"},
 			},
@@ -293,13 +274,10 @@ func TestAccProjectResources(t *testing.T) {
 }
 
 // testAccImportID builds a "project_id/resource_attr" import identifier.
-// attrKey is the attribute to read from the resource state ("id" or "name").
-func testAccImportID(projectRes, targetRes, attrKey string) resource.ImportStateIdFunc {
+// The project ID is taken from SANITY_PROJECT_ID. attrKey is the attribute
+// to read from the resource state ("id" or "name").
+func testAccImportID(targetRes, attrKey string) resource.ImportStateIdFunc {
 	return func(s *terraform.State) (string, error) {
-		project, ok := s.RootModule().Resources[projectRes]
-		if !ok {
-			return "", fmt.Errorf("resource %s not found", projectRes)
-		}
 		target, ok := s.RootModule().Resources[targetRes]
 		if !ok {
 			return "", fmt.Errorf("resource %s not found", targetRes)
@@ -308,6 +286,6 @@ func testAccImportID(projectRes, targetRes, attrKey string) resource.ImportState
 		if attrKey == "id" {
 			val = target.Primary.ID
 		}
-		return fmt.Sprintf("%s/%s", project.Primary.ID, val), nil
+		return fmt.Sprintf("%s/%s", testAccProjectID(), val), nil
 	}
 }

@@ -32,7 +32,7 @@ tasks:
       - go test -v ./...
 
   testacc:
-    desc: Run acceptance tests (replays recorded cassettes, no API token needed)
+    desc: Run acceptance tests (replays recorded cassettes)
     env:
       TF_ACC: "1"
       SANITY_TOKEN: "test-token"
@@ -40,7 +40,7 @@ tasks:
       - go test -v ./internal/provider/ -run TestAcc -timeout 30m
 
   testacc-record:
-    desc: Re-record acceptance test cassettes (requires SANITY_TOKEN)
+    desc: Re-record acceptance test cassettes (requires SANITY_TOKEN and SANITY_PROJECT_ID)
     env:
       TF_ACC: "1"
       RECORD: "true"

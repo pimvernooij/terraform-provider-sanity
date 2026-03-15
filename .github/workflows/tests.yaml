@@ -26,6 +26,7 @@ jobs:
         env:
           TF_ACC: "1"
           SANITY_TOKEN: "test-token"
+          SANITY_PROJECT_ID: ${{ vars.SANITY_PROJECT_ID }}
       - name: Build binary
         uses: goreleaser/goreleaser-action@v6
         with:

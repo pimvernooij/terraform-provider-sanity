@@ -128,7 +128,7 @@ func (r *SchemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	putReq := &schemaclient.PutSchemasRequest{
+	putReq := &schemaclient.SchemaEntry{
 		Workspace: schemaclient.SchemaWorkspace{
 			Name:  data.WorkspaceName.ValueString(),
 			Title: data.WorkspaceTitle.ValueString(),
@@ -138,16 +138,9 @@ func (r *SchemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		Tag:     data.Tag.ValueString(),
 	}
 
-	docs, err := r.client.PutSchemas(ctx, data.ProjectID.ValueString(), data.Dataset.ValueString(), putReq)
+	doc, err := r.client.PutSchemas(ctx, data.ProjectID.ValueString(), data.Dataset.ValueString(), putReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create schema: %s", err))
-		return
-	}
-
-	expectedID := schemaclient.SchemaID(data.WorkspaceName.ValueString(), data.Tag.ValueString())
-	doc := findSchemaDoc(docs, expectedID)
-	if doc == nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Schema document %s not found in API response", expectedID))
 		return
 	}
 
@@ -181,7 +174,7 @@ func (r *SchemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	putReq := &schemaclient.PutSchemasRequest{
+	putReq := &schemaclient.SchemaEntry{
 		Workspace: schemaclient.SchemaWorkspace{
 			Name:  data.WorkspaceName.ValueString(),
 			Title: data.WorkspaceTitle.ValueString(),
@@ -191,16 +184,9 @@ func (r *SchemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		Tag:     data.Tag.ValueString(),
 	}
 
-	docs, err := r.client.PutSchemas(ctx, data.ProjectID.ValueString(), data.Dataset.ValueString(), putReq)
+	doc, err := r.client.PutSchemas(ctx, data.ProjectID.ValueString(), data.Dataset.ValueString(), putReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update schema: %s", err))
-		return
-	}
-
-	expectedID := schemaclient.SchemaID(data.WorkspaceName.ValueString(), data.Tag.ValueString())
-	doc := findSchemaDoc(docs, expectedID)
-	if doc == nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Schema document %s not found in API response", expectedID))
 		return
 	}
 
@@ -276,20 +262,20 @@ func (r *SchemaResource) updateModelFromDoc(data *SchemaResourceModel, doc *sche
 	}
 }
 
-func findSchemaDoc(docs []schemaclient.SchemaDocument, id string) *schemaclient.SchemaDocument {
-	for i := range docs {
-		if docs[i].ID == id {
-			return &docs[i]
-		}
-	}
-	return nil
-}
-
 func normalizeJSON(raw json.RawMessage) (string, error) {
 	var v interface{}
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return "", err
 	}
+
+	// The API may return the schema as a JSON string rather than a raw array.
+	// If so, decode the string to get the actual array for normalization.
+	if s, ok := v.(string); ok {
+		if err := json.Unmarshal([]byte(s), &v); err != nil {
+			return "", err
+		}
+	}
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return "", err
