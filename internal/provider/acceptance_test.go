@@ -80,22 +80,28 @@ func providerFactoriesWithRecorder(t *testing.T, cassetteName string) (map[strin
 	return factories, stop
 }
 
+// cassetteProjectID is the project ID baked into the recorded cassettes.
+// During replay this is used directly. During recording, SANITY_PROJECT_ID
+// overrides it (and must match the real project used for recording).
+const cassetteProjectID = "pib5ji3x"
+
 // testAccPreCheck validates required environment variables are set.
-// During replay, SANITY_TOKEN and SANITY_PROJECT_ID can be dummy/placeholder values.
 func testAccPreCheck(t *testing.T) {
-	if v := os.Getenv("SANITY_TOKEN"); v == "" {
-		t.Fatal("SANITY_TOKEN must be set for acceptance tests")
-	}
-	if v := os.Getenv("SANITY_PROJECT_ID"); v == "" {
-		t.Fatal("SANITY_PROJECT_ID must be set for acceptance tests")
+	if os.Getenv("RECORD") == "true" {
+		if v := os.Getenv("SANITY_PROJECT_ID"); v == "" {
+			t.Fatal("SANITY_PROJECT_ID must be set when RECORD=true")
+		}
 	}
 }
 
-// testAccProjectID returns the project ID from the SANITY_PROJECT_ID env var.
-// During recording this must be a real Sanity project ID. During replay it
-// must match the project ID baked into the recorded cassettes.
+// testAccProjectID returns the project ID to use in tests.
+// When recording, it uses SANITY_PROJECT_ID from the environment.
+// When replaying, it uses the ID baked into the cassettes.
 func testAccProjectID() string {
-	return os.Getenv("SANITY_PROJECT_ID")
+	if v := os.Getenv("SANITY_PROJECT_ID"); v != "" {
+		return v
+	}
+	return cassetteProjectID
 }
 
 // loadExample reads an example .tf file and substitutes var.xxx references
