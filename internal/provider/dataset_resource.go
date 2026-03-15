@@ -95,12 +95,20 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	aclMode := data.AclMode.ValueString()
+	if aclMode != "" && aclMode != "public" && aclMode != "private" {
+		resp.Diagnostics.AddError("Invalid ACL Mode",
+			fmt.Sprintf("acl_mode must be \"public\" or \"private\", got %q", aclMode))
+		return
+	}
+
 	_, err := r.client.Projects.CreateDataset(ctx, data.Project.ValueString(), &sanity.CreateDatasetRequest{
 		Name:    data.Name.ValueString(),
-		AclMode: data.AclMode.ValueString(),
+		AclMode: aclMode,
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
+		resp.Diagnostics.AddError("Unable to Create Dataset",
+			fmt.Sprintf("Could not create dataset %q in project %s: %s", data.Name.ValueString(), data.Project.ValueString(), err))
 		return
 	}
 
@@ -137,7 +145,8 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	if !found {
-		resp.Diagnostics.AddError("dataset not found", "dataset not found")
+		resp.Diagnostics.AddError("Dataset Not Found",
+			fmt.Sprintf("Dataset %q not found in project %s", data.Name.ValueString(), data.Project.ValueString()))
 		return
 	}
 
@@ -183,9 +192,6 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	reqProject := resource.ImportStateRequest{ID: parts[0]}
-	reqName := resource.ImportStateRequest{ID: parts[1]}
-
-	resource.ImportStatePassthroughID(ctx, path.Root("project"), reqProject, resp)
-	resource.ImportStatePassthroughID(ctx, path.Root("name"), reqName, resp)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("project"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[1])...)
 }

@@ -353,11 +353,8 @@ func (r *WebhookResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	reqProjectId := resource.ImportStateRequest{ID: parts[0]}
-	reqWebhookId := resource.ImportStateRequest{ID: parts[1]}
-
-	resource.ImportStatePassthroughID(ctx, path.Root("project_id"), reqProjectId, resp)
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), reqWebhookId, resp)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("project_id"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
 // updateModelFromWebhook updates the Terraform model with data from the API webhook struct

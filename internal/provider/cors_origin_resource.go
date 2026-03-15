@@ -153,7 +153,8 @@ func (r *CORSOriginResource) Read(ctx context.Context, req resource.ReadRequest,
 	rawId := int64(0)
 	_, err = fmt.Sscanf(data.Id.ValueString(), "%d", &rawId)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
+		resp.Diagnostics.AddError("Invalid CORS Entry ID",
+			fmt.Sprintf("Could not parse CORS entry ID %q as integer: %s", data.Id.ValueString(), err))
 		return
 	}
 
@@ -167,7 +168,8 @@ func (r *CORSOriginResource) Read(ctx context.Context, req resource.ReadRequest,
 		}
 	}
 	if !found {
-		resp.Diagnostics.AddError("cors entry not found", "cors entry not found")
+		resp.Diagnostics.AddError("CORS Entry Not Found",
+			fmt.Sprintf("CORS entry %s not found in project %s", data.Id.ValueString(), data.Project.ValueString()))
 		return
 	}
 
@@ -229,8 +231,8 @@ func (r *CORSOriginResource) ImportState(ctx context.Context, req resource.Impor
 
 	for _, e := range entries {
 		if e.Origin == origin {
-			resource.ImportStatePassthroughID(ctx, path.Root("id"), resource.ImportStateRequest{ID: fmt.Sprintf("%d", e.Id)}, resp)
-			resource.ImportStatePassthroughID(ctx, path.Root("project"), resource.ImportStateRequest{ID: projectId}, resp)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%d", e.Id))...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("project"), projectId)...)
 			return
 		}
 	}

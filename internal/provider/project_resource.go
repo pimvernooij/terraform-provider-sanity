@@ -163,32 +163,36 @@ func (r *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	requiresUpdate := !data.StudioHost.IsNull() ||
-		!data.ExternalStudioHost.IsNull() ||
-		!data.Color.IsNull() ||
-		!data.IsDisabledByUser.IsNull() ||
-		!data.ActivityFeedEnabled.IsNull()
+	hasValue := func(s types.String) bool { return !s.IsNull() && !s.IsUnknown() }
+	hasBoolValue := func(b types.Bool) bool { return !b.IsNull() && !b.IsUnknown() }
+
+	requiresUpdate := hasValue(data.StudioHost) ||
+		hasValue(data.ExternalStudioHost) ||
+		hasValue(data.Color) ||
+		hasBoolValue(data.IsDisabledByUser) ||
+		hasBoolValue(data.ActivityFeedEnabled)
 
 	if requiresUpdate {
 		updateReq := &sanity.UpdateProjectRequest{}
-		if !data.StudioHost.IsNull() {
+		if hasValue(data.StudioHost) {
 			updateReq.StudioHost = data.StudioHost.ValueString()
 		}
-		if !data.ExternalStudioHost.IsNull() {
+		if hasValue(data.ExternalStudioHost) {
 			updateReq.ExternalStudioHost = data.ExternalStudioHost.ValueString()
 		}
-		if !data.Color.IsNull() {
+		if hasValue(data.Color) {
 			updateReq.Color = data.Color.ValueString()
 		}
-		if !data.IsDisabledByUser.IsNull() {
+		if hasBoolValue(data.IsDisabledByUser) {
 			updateReq.IsDisabledByUser = sanity.NewBool(data.IsDisabledByUser.ValueBool())
 		}
-		if !data.ActivityFeedEnabled.IsNull() {
+		if hasBoolValue(data.ActivityFeedEnabled) {
 			updateReq.ActivityFeedEnabled = sanity.NewBool(data.ActivityFeedEnabled.ValueBool())
 		}
 		project, err = r.client.Projects.Update(ctx, project.Id, updateReq)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", err.Error())
+			resp.Diagnostics.AddError("Unable to update project",
+				fmt.Sprintf("Could not update project %s after creation: %s", project.Id, err))
 			r.client.Projects.Delete(ctx, project.Id)
 			return
 		}
@@ -255,37 +259,40 @@ func (r *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	hasValue := func(s types.String) bool { return !s.IsNull() && !s.IsUnknown() }
+	hasBoolValue := func(b types.Bool) bool { return !b.IsNull() && !b.IsUnknown() }
+
 	var studioHost string
 	req.State.GetAttribute(ctx, path.Root("studio_host"), &studioHost)
 
-	requiresUpdate := !data.Name.IsNull() ||
-		(!data.StudioHost.IsNull() && studioHost == "") ||
-		!data.ExternalStudioHost.IsNull() ||
-		!data.Color.IsNull() ||
-		!data.IsDisabledByUser.IsNull() ||
-		!data.ActivityFeedEnabled.IsNull()
+	requiresUpdate := hasValue(data.Name) ||
+		(hasValue(data.StudioHost) && studioHost == "") ||
+		hasValue(data.ExternalStudioHost) ||
+		hasValue(data.Color) ||
+		hasBoolValue(data.IsDisabledByUser) ||
+		hasBoolValue(data.ActivityFeedEnabled)
 
 	if !requiresUpdate {
 		return
 	}
 
 	updateReq := &sanity.UpdateProjectRequest{}
-	if !data.Name.IsNull() {
+	if hasValue(data.Name) {
 		updateReq.DisplayName = data.Name.ValueString()
 	}
-	if studioHost == "" && !data.StudioHost.IsNull() {
+	if studioHost == "" && hasValue(data.StudioHost) {
 		updateReq.StudioHost = data.StudioHost.ValueString()
 	}
-	if !data.ExternalStudioHost.IsNull() {
+	if hasValue(data.ExternalStudioHost) {
 		updateReq.ExternalStudioHost = data.ExternalStudioHost.ValueString()
 	}
-	if !data.Color.IsNull() {
+	if hasValue(data.Color) {
 		updateReq.Color = data.Color.ValueString()
 	}
-	if !data.IsDisabledByUser.IsNull() {
+	if hasBoolValue(data.IsDisabledByUser) {
 		updateReq.IsDisabledByUser = sanity.NewBool(data.IsDisabledByUser.ValueBool())
 	}
-	if !data.ActivityFeedEnabled.IsNull() {
+	if hasBoolValue(data.ActivityFeedEnabled) {
 		updateReq.ActivityFeedEnabled = sanity.NewBool(data.ActivityFeedEnabled.ValueBool())
 	}
 	project, err := r.client.Projects.Update(ctx, data.Id.ValueString(), updateReq)

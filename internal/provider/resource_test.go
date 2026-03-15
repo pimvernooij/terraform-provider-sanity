@@ -469,6 +469,28 @@ func TestWebhookUpdateModel_FilterFromRule(t *testing.T) {
 	})
 }
 
+func TestDatasetAclModeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		aclMode string
+		valid   bool
+	}{
+		{"public", "public", true},
+		{"private", "private", true},
+		{"empty", "", true},
+		{"invalid", "restricted", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valid := tt.aclMode == "" || tt.aclMode == "public" || tt.aclMode == "private"
+			if valid != tt.valid {
+				t.Errorf("aclMode %q: valid = %v, want %v", tt.aclMode, valid, tt.valid)
+			}
+		})
+	}
+}
+
 func TestWebhookUpdateModel_HeadersMapping(t *testing.T) {
 	r := &WebhookResource{}
 
