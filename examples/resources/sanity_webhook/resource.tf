@@ -1,12 +1,12 @@
 resource "sanity_webhook" "main" {
-  project_id     = var.project_id
-  name           = "Content Updates Webhook"
-  dataset        = var.dataset_name
-  url            = "https://example.com/webhooks/sanity"
-  http_method    = "POST"
-  include_drafts = false
-  filter         = "_type == 'post'"
-  secret         = var.webhook_secret
+  project_id  = var.project_id
+  name        = "Content Updates Webhook"
+  dataset     = var.dataset_name
+  url         = "https://example.com/webhooks/sanity"
+  http_method = "POST"
+  on          = ["create", "update", "delete"]
+  filter      = "_type == 'post'"
+  secret      = var.webhook_secret
 
   headers = {
     "Content-Type" = "application/json"
