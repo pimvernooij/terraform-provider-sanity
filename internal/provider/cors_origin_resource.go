@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tessellator/go-sanity/sanity"
-	"github.com/tessellator/terraform-provider-sanity/internal/provider/attribute_plan_modifier"
 )
 
 var _ resource.Resource = &CORSOriginResource{}
@@ -36,47 +38,43 @@ func (r *CORSOriginResource) Metadata(ctx context.Context, req resource.Metadata
 	resp.TypeName = req.ProviderTypeName + "_cors_origin"
 }
 
-func (r *CORSOriginResource) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *CORSOriginResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		MarkdownDescription: "Provides a CORS origin to a Sanity project. A CORS origin is a host that can connect to the Sanity Project API.",
 
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "The unique ID for the CORS origin.",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
-				Type: types.StringType,
 			},
-			"origin": {
+			"origin": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "The origin you want to allow traffic from, stating explicitly the protocol, host name and port. Wildcards (`*`) are allowed. Use the following format: `protocol://host:port`.",
-				Type:                types.StringType,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"allow_credentials": {
-				Optional: true,
-				Computed: true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.RequiresReplace(),
-					attribute_plan_modifier.DefaultValue(types.Bool{Value: true}),
-				},
+			"allow_credentials": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(true),
 				MarkdownDescription: "Indicates whether the origin is allowed to send credentials (e.g. a session cookie or an authorization token). Defaults to `true`.",
-				Type:                types.BoolType,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
 			},
-			"project": {
+			"project": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "The ID of the project that the CORS origin belongs to.",
-				Type:                types.StringType,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *CORSOriginResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -85,18 +83,18 @@ func (r *CORSOriginResource) Configure(ctx context.Context, req resource.Configu
 		return
 	}
 
-	client, ok := req.ProviderData.(*sanity.Client)
+	clients, ok := req.ProviderData.(*ProviderClients)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *ProviderClients, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = clients.SanityClient
 }
 
 func (r *CORSOriginResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -109,20 +107,20 @@ func (r *CORSOriginResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	corsReq := &sanity.CreateCORSEntryRequest{
-		Origin:           data.Origin.Value,
+		Origin:           data.Origin.ValueString(),
 		AllowCredentials: sanity.NewBool(true),
 	}
 	if !data.AllowCredentials.IsNull() {
-		corsReq.AllowCredentials = sanity.NewBool(data.AllowCredentials.Value)
+		corsReq.AllowCredentials = sanity.NewBool(data.AllowCredentials.ValueBool())
 	}
-	entry, err := r.client.Projects.CreateCORSEntry(ctx, data.Project.Value, corsReq)
+	entry, err := r.client.Projects.CreateCORSEntry(ctx, data.Project.ValueString(), corsReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
 
-	data.Id = types.String{Value: fmt.Sprintf("%d", entry.Id)}
-	data.AllowCredentials = types.Bool{Value: entry.AllowCredentials}
+	data.Id = types.StringValue(fmt.Sprintf("%d", entry.Id))
+	data.AllowCredentials = types.BoolValue(entry.AllowCredentials)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -137,25 +135,26 @@ func (r *CORSOriginResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	if data.Id.Null {
+	if data.Id.IsNull() {
 		resp.Diagnostics.AddError("Entry id is null", "Entry id is null")
 		return
 	}
-	if data.Project.Null {
+	if data.Project.IsNull() {
 		resp.Diagnostics.AddError("Project is null", "Project is null")
 		return
 	}
 
-	entries, err := r.client.Projects.ListCORSEntries(ctx, data.Project.Value)
+	entries, err := r.client.Projects.ListCORSEntries(ctx, data.Project.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
 
 	rawId := int64(0)
-	_, err = fmt.Sscanf(data.Id.Value, "%d", &rawId)
+	_, err = fmt.Sscanf(data.Id.ValueString(), "%d", &rawId)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
+		resp.Diagnostics.AddError("Invalid CORS Entry ID",
+			fmt.Sprintf("Could not parse CORS entry ID %q as integer: %s", data.Id.ValueString(), err))
 		return
 	}
 
@@ -169,12 +168,13 @@ func (r *CORSOriginResource) Read(ctx context.Context, req resource.ReadRequest,
 		}
 	}
 	if !found {
-		resp.Diagnostics.AddError("cors entry not found", "cors entry not found")
+		resp.Diagnostics.AddError("CORS Entry Not Found",
+			fmt.Sprintf("CORS entry %s not found in project %s", data.Id.ValueString(), data.Project.ValueString()))
 		return
 	}
 
-	data.AllowCredentials = types.Bool{Value: entry.AllowCredentials}
-	data.Origin = types.String{Value: entry.Origin}
+	data.AllowCredentials = types.BoolValue(entry.AllowCredentials)
+	data.Origin = types.StringValue(entry.Origin)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -192,26 +192,26 @@ func (r *CORSOriginResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	if data.Id.Null {
+	if data.Id.IsNull() {
 		resp.Diagnostics.AddError("Entry id is null", "Entry id is null")
 		return
 	}
-	if data.Project.Null {
+	if data.Project.IsNull() {
 		resp.Diagnostics.AddError("Project is null", "Project is null")
 		return
 	}
 
 	rawId := int64(0)
-	_, err := fmt.Sscanf(data.Id.Value, "%d", &rawId)
+	_, err := fmt.Sscanf(data.Id.ValueString(), "%d", &rawId)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
 
-	_, err = r.client.Projects.DeleteCORSEntry(ctx, data.Project.Value, rawId)
+	_, err = r.client.Projects.DeleteCORSEntry(ctx, data.Project.ValueString(), rawId)
 
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("entry %s could not be deleted, got error: %s", data.Id.Value, err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("entry %s could not be deleted, got error: %s", data.Id.ValueString(), err))
 		return
 	}
 }
@@ -231,8 +231,8 @@ func (r *CORSOriginResource) ImportState(ctx context.Context, req resource.Impor
 
 	for _, e := range entries {
 		if e.Origin == origin {
-			resource.ImportStatePassthroughID(ctx, path.Root("id"), resource.ImportStateRequest{ID: fmt.Sprintf("%d", e.Id)}, resp)
-			resource.ImportStatePassthroughID(ctx, path.Root("project"), resource.ImportStateRequest{ID: projectId}, resp)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%d", e.Id))...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("project"), projectId)...)
 			return
 		}
 	}

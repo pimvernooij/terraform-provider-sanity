@@ -13,21 +13,35 @@ Provides a Sanity webhook. Webhooks allow you to get notified when content is cr
 ## Example Usage
 
 ```terraform
-resource "sanity_webhook" "example" {
-  project_id      = sanity_project.example.id
-  name            = "Content Updates Webhook"
-  dataset         = "production"
-  url             = "https://api.example.com/webhooks/sanity"
-  http_method     = "POST"
-  include_drafts  = false
-  filter          = "_type == 'post'"
-  
+resource "sanity_webhook" "main" {
+  project_id     = var.project_id
+  name           = "Content Updates Webhook"
+  dataset        = var.dataset_name
+  url            = "https://api.example.com/webhooks/sanity"
+  http_method    = "POST"
+  include_drafts = false
+  filter         = "_type == 'post'"
+  secret         = var.webhook_secret
+
   headers = {
-    "Authorization" = "Bearer ${var.api_token}"
-    "Content-Type"  = "application/json"
+    "Content-Type" = "application/json"
   }
-  
-  secret = var.webhook_secret
+}
+
+variable "project_id" {
+  description = "The ID of the Sanity project"
+  type        = string
+}
+
+variable "dataset_name" {
+  description = "The dataset to listen to"
+  type        = string
+}
+
+variable "webhook_secret" {
+  description = "Secret for webhook signature verification"
+  type        = string
+  sensitive   = true
 }
 ```
 
@@ -57,11 +71,4 @@ resource "sanity_webhook" "example" {
 - `id` (String) The webhook ID.
 - `updated_at` (String) The time the webhook was last updated.
 
-## Import
 
-Import is supported using the following syntax:
-
-```shell
-# import using the project ID and webhook ID separated by a slash
-terraform import sanity_webhook.example project-id/webhook-id
-```

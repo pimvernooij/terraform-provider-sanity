@@ -1,0 +1,34 @@
+name: Run Tests
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.4.6
+          terraform_wrapper: false
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v8
+        with:
+          args: --issues-exit-code=0 --timeout=5m
+      - name: Run unit tests
+        run: go test -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./... -v ./...
+      - name: Run acceptance tests (VCR replay)
+        run: go test -v ./internal/provider/ -run TestAcc -timeout 30m
+        env:
+          TF_ACC: "1"
+          SANITY_TOKEN: "test-token"
+      - name: Build binary
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: build --snapshot --clean --single-target
+        env:
+          GOPATH: ${{ env.GOPATH }}

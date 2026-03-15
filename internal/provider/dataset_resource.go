@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tessellator/go-sanity/sanity"
 )
@@ -34,38 +35,35 @@ func (r *DatasetResource) Metadata(ctx context.Context, req resource.MetadataReq
 	resp.TypeName = req.ProviderTypeName + "_dataset"
 }
 
-func (r *DatasetResource) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *DatasetResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		MarkdownDescription: "Provides a dataset to a Sanity project. A dataset is like a database for your content, and you manage its contents with a studio and query it with GROQ or GraphQL.",
 
-		Attributes: map[string]tfsdk.Attribute{
-			"project": {
+		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{
 				Required:            true,
-				Type:                types.StringType,
 				MarkdownDescription: "The ID of the project that the dataset belongs to.",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Required:            true,
-				Type:                types.StringType,
 				MarkdownDescription: "The name of the dataset.",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"acl_mode": {
+			"acl_mode": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				Type:                types.StringType,
 				MarkdownDescription: "The ACL mode for the data. Valid options are `public` and `private`.",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *DatasetResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -74,18 +72,18 @@ func (r *DatasetResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*sanity.Client)
+	clients, ok := req.ProviderData.(*ProviderClients)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *ProviderClients, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = clients.SanityClient
 }
 
 func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -97,12 +95,20 @@ func (r *DatasetResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	_, err := r.client.Projects.CreateDataset(ctx, data.Project.Value, &sanity.CreateDatasetRequest{
-		Name:    data.Name.Value,
-		AclMode: data.AclMode.Value,
+	aclMode := data.AclMode.ValueString()
+	if aclMode != "" && aclMode != "public" && aclMode != "private" {
+		resp.Diagnostics.AddError("Invalid ACL Mode",
+			fmt.Sprintf("acl_mode must be \"public\" or \"private\", got %q", aclMode))
+		return
+	}
+
+	_, err := r.client.Projects.CreateDataset(ctx, data.Project.ValueString(), &sanity.CreateDatasetRequest{
+		Name:    data.Name.ValueString(),
+		AclMode: aclMode,
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
+		resp.Diagnostics.AddError("Unable to Create Dataset",
+			fmt.Sprintf("Could not create dataset %q in project %s: %s", data.Name.ValueString(), data.Project.ValueString(), err))
 		return
 	}
 
@@ -119,7 +125,7 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	projectId := data.Project.Value
+	projectId := data.Project.ValueString()
 
 	datasets, err := r.client.Projects.ListDatasets(ctx, projectId)
 	if err != nil {
@@ -131,7 +137,7 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 	found := false
 
 	for _, d := range datasets {
-		if d.Name == data.Name.Value {
+		if d.Name == data.Name.ValueString() {
 			dataset = d
 			found = true
 			break
@@ -139,11 +145,12 @@ func (r *DatasetResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	if !found {
-		resp.Diagnostics.AddError("dataset not found", "dataset not found")
+		resp.Diagnostics.AddError("Dataset Not Found",
+			fmt.Sprintf("Dataset %q not found in project %s", data.Name.ValueString(), data.Project.ValueString()))
 		return
 	}
 
-	data.AclMode = types.String{Value: dataset.AclMode}
+	data.AclMode = types.StringValue(dataset.AclMode)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -161,19 +168,19 @@ func (r *DatasetResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	if data.Name.Null {
+	if data.Name.IsNull() {
 		resp.Diagnostics.AddError("Name is null", "Name is null")
 		return
 	}
-	if data.Project.Null {
+	if data.Project.IsNull() {
 		resp.Diagnostics.AddError("Project is null", "Project is null")
 		return
 	}
 
-	_, err := r.client.Projects.DeleteDataset(ctx, data.Project.Value, data.Name.Value)
+	_, err := r.client.Projects.DeleteDataset(ctx, data.Project.ValueString(), data.Name.ValueString())
 
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("dataset %s could not be deleted, got error: %s", data.Name.Value, err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("dataset %s could not be deleted, got error: %s", data.Name.ValueString(), err))
 		return
 	}
 }
@@ -185,9 +192,6 @@ func (r *DatasetResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	reqProject := resource.ImportStateRequest{ID: parts[0]}
-	reqName := resource.ImportStateRequest{ID: parts[1]}
-
-	resource.ImportStatePassthroughID(ctx, path.Root("project"), reqProject, resp)
-	resource.ImportStatePassthroughID(ctx, path.Root("name"), reqName, resp)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("project"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[1])...)
 }

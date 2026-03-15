@@ -13,10 +13,15 @@ Provides a Sanity project token. The token key is a sensitive value that can be 
 ## Example Usage
 
 ```terraform
-resource "sanity_project_token" "deployer" {
+resource "sanity_project_token" "main" {
   project   = var.project_id
   label     = "Deployer token"
   role_name = "deploy-studio"
+}
+
+variable "project_id" {
+  description = "The ID of the Sanity project"
+  type        = string
 }
 ```
 
